@@ -14,7 +14,8 @@ namespace Monitoring
         private static readonly Color[] PulseColors =
         {
             Color.LimeGreen, Color.Cyan, Color.Magenta, Color.Yellow,
-            Color.HotPink, Color.Orange, Color.MediumPurple, Color.Turquoise
+            Color.HotPink, Color.Orange, Color.MediumPurple, Color.Turquoise,
+            Color.DodgerBlue
         };
         private const int BlinkTicks = 6;
 
