@@ -23,13 +23,11 @@ namespace Monitoring
             _configPath = configPath ?? ExclusionConfig.DefaultConfigPath;
         }
 
-        public async Task<string?> CaptureAsync()
+        public async Task<string?> CaptureAsync(bool applyExclusions = true)
         {
             Directory.CreateDirectory(_logFolder);
 
-            var config = ExclusionConfig.Load(_configPath);
-
-            var excludedWindows = GetExcludedWindows(config);
+            var excludedWindows = applyExclusions ? GetExcludedWindows(ExclusionConfig.Load(_configPath)) : new List<WindowInfo>();
             var affinityWindows = new List<IntPtr>();
             var hiddenWindows = new List<IntPtr>();
 

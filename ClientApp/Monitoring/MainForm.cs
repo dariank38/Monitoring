@@ -222,7 +222,7 @@ namespace Monitoring
                     return;
                 }
 
-                var filePath = await _captureModule.CaptureAsync();
+                var filePath = await _captureModule.CaptureAsync(_warningEnabled);
 
                 if (filePath != null)
                 {
