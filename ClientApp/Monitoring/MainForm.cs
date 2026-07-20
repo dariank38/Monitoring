@@ -13,11 +13,9 @@ namespace Monitoring
 
         private static readonly Color[] PulseColors =
         {
-            Color.LimeGreen, Color.Cyan, Color.Magenta, Color.Yellow,
-            Color.HotPink, Color.Orange, Color.MediumPurple, Color.Turquoise,
-            Color.DodgerBlue
+            Color.Red, Color.Green, Color.Blue, Color.Black, Color.White
         };
-        private const int BlinkTicks = 6;
+        private const int PulseIntervalMs = 2000;
 
         private readonly System.Windows.Forms.Timer _captureTimer;
         private readonly System.Windows.Forms.Timer _pulseTimer;
@@ -32,7 +30,6 @@ namespace Monitoring
         private Color _toggleFlashColor = Color.Empty;
         private int _toggleFlashRemaining;
         private int _colorIndex;
-        private int _blinkRemaining;
         private readonly List<IndicatorForm> _indicators = new();
 
         public MainForm()
@@ -66,7 +63,7 @@ namespace Monitoring
 
             _pulseTimer = new System.Windows.Forms.Timer
             {
-                Interval = 1000
+                Interval = PulseIntervalMs
             };
             _pulseTimer.Tick += PulseTimer_Tick;
             _pulseTimer.Start();
@@ -90,7 +87,6 @@ namespace Monitoring
                 _toggleFlashColor = _warningEnabled ? Color.LimeGreen : Color.Red;
                 _toggleFlashRemaining = 8;
                 _captureImminent = false;
-                _blinkRemaining = 0;
                 _colorIndex = 0;
             }
             base.WndProc(ref m);
@@ -106,39 +102,26 @@ namespace Monitoring
 
         private void PulseTimer_Tick(object? sender, EventArgs e)
         {
-            _pulseOn = !_pulseOn;
-
             Color color;
+
             if (_toggleFlashRemaining > 0)
             {
+                _pulseOn = !_pulseOn;
                 color = _pulseOn ? _toggleFlashColor : Color.Black;
                 if (!_pulseOn)
                     _toggleFlashRemaining--;
             }
             else if (_captureImminent)
             {
-                color = _pulseOn ? Color.DodgerBlue : Color.Black;
-            }
-            else if (_blinkRemaining > 0)
-            {
+                _pulseOn = !_pulseOn;
                 color = _pulseOn ? Color.White : Color.Black;
-                if (!_pulseOn)
-                    _blinkRemaining--;
             }
             else
             {
-                var baseColor = PulseColors[_colorIndex];
-                color = _pulseOn ? baseColor : ControlPaint.Dark(baseColor);
-
-                if (!_pulseOn)
-                {
-                    _colorIndex++;
-                    if (_colorIndex >= PulseColors.Length)
-                    {
-                        _colorIndex = 0;
-                        _blinkRemaining = BlinkTicks;
-                    }
-                }
+                color = PulseColors[_colorIndex];
+                _colorIndex++;
+                if (_colorIndex >= PulseColors.Length)
+                    _colorIndex = 0;
             }
 
             BackColor = color;
@@ -201,7 +184,7 @@ namespace Monitoring
                 System.Diagnostics.Debug.WriteLine($"[Capture] Warning: capture in {WarningMs / 1000}s");
                 await Task.Delay(WarningMs);
                 _captureImminent = false;
-                _pulseTimer.Interval = 1000;
+                _pulseTimer.Interval = PulseIntervalMs;
             }
 
             await CaptureScreenAsync();
