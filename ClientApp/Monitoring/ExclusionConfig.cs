@@ -52,7 +52,7 @@ namespace Monitoring
                 return false;
 
             return ExcludedProcesses.Any(p =>
-                string.Equals(p, processName, StringComparison.OrdinalIgnoreCase));
+                processName.Contains(p, StringComparison.OrdinalIgnoreCase));
         }
 
         public bool IsSiteExcluded(string windowTitle)
@@ -70,7 +70,7 @@ namespace Monitoring
                 return false;
 
             return BrowserProcessNames.Any(p =>
-                string.Equals(p, processName, StringComparison.OrdinalIgnoreCase));
+                processName.Contains(p, StringComparison.OrdinalIgnoreCase));
         }
     }
 }
