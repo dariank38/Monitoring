@@ -1,0 +1,20 @@
+{
+  "ExcludedProcesses": [
+    "keepass.exe",
+    "1password.exe",
+    "bitwarden.exe",
+    "enpass.exe"
+  ],
+  "ExcludedSites": [
+    "banking.com",
+    "paypal.com",
+    "stripe.com"
+  ],
+  "BrowserProcessNames": [
+    "chrome.exe",
+    "msedge.exe",
+    "firefox.exe",
+    "opera.exe",
+    "brave.exe"
+  ]
+}

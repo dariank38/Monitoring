@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Windows.Forms;
 
 namespace Monitoring
@@ -15,6 +14,7 @@ namespace Monitoring
         private readonly System.Windows.Forms.Timer _pulseTimer;
         private readonly ActivityTracker _activityTracker;
         private readonly ServerClient _serverClient;
+        private readonly CaptureModule _captureModule;
         private bool _isCapturing;
         private bool _pulseOn;
         private readonly List<IndicatorForm> _indicators = new();
@@ -30,6 +30,7 @@ namespace Monitoring
 
             _activityTracker = new ActivityTracker();
             _serverClient = new ServerClient();
+            _captureModule = new CaptureModule(LogFolder);
 
             foreach (var screen in Screen.AllScreens)
             {
@@ -122,26 +123,16 @@ namespace Monitoring
 
             try
             {
-                Directory.CreateDirectory(LogFolder);
+                var filePath = await _captureModule.CaptureAsync();
 
-                var bounds = SystemInformation.VirtualScreen;
-
-                using var bitmap = new Bitmap(bounds.Width, bounds.Height);
-                using (var graphics = Graphics.FromImage(bitmap))
+                if (filePath != null)
                 {
-                    graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
+                    _ = _serverClient.UploadScreenshotAsync(filePath, DateTime.Now);
+
+                    var logs = ActivityTracker.LoadLogEntries();
+                    if (logs.Count > 0)
+                        _ = _serverClient.UploadWorkLogsAsync(logs);
                 }
-
-                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                var filePath = Path.Combine(LogFolder, fileName);
-
-                await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
-
-                _ = _serverClient.UploadScreenshotAsync(filePath, DateTime.Now);
-
-                var logs = ActivityTracker.LoadLogEntries();
-                if (logs.Count > 0)
-                    _ = _serverClient.UploadWorkLogsAsync(logs);
             }
             catch (Exception ex)
             {
