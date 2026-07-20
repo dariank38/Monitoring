@@ -1,0 +1,23 @@
+# Server
+Server/node_modules/
+Server/uploads/
+Server/monitoring.db
+Server/monitoring.db-wal
+Server/monitoring.db-shm
+Server/.env
+
+# Admin (React/Vite)
+Admin/node_modules/
+Admin/dist/
+
+# ClientApp (.NET)
+ClientApp/**/bin/
+ClientApp/**/obj/
+ClientApp/**/.vs/
+ClientApp/**/*.user
+ClientApp/**/*.suo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
