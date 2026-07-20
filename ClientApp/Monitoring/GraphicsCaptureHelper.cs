@@ -119,6 +119,7 @@ namespace Monitoring
     public static class Direct3D11Helper
     {
         private static readonly Guid IID_ID3D11Texture2D = new("6F15AAF2-D208-4E89-9AB4-4EAD5C733242");
+        private static readonly Guid IID_IDirect3DDxgiInterfaceAccess = new("A9B3D012-3DF2-4EE3-BEF7-5C25D9D5A1D6");
 
         [ComImport]
         [Guid("A9B3D012-3DF2-4EE3-BEF7-5C25D9D5A1D6")]
@@ -131,13 +132,37 @@ namespace Monitoring
 
         public static SharpDX.DXGI.Surface GetDXGISurface(object surface)
         {
-            var access = (IDirect3DDxgiInterfaceAccess)surface;
-            var iid = IID_ID3D11Texture2D;
-            var ptr = access.GetInterface(ref iid);
-            var texture = Marshal.GetObjectForIUnknown(ptr) as SharpDX.Direct3D11.Texture2D;
-            var dxgiSurface = texture!.QueryInterface<SharpDX.DXGI.Surface>();
-            texture.Dispose();
-            return dxgiSurface;
+            var unkPtr = Marshal.GetIUnknownForObject(surface);
+            try
+            {
+                var dxgiIid = IID_IDirect3DDxgiInterfaceAccess;
+                Marshal.QueryInterface(unkPtr, ref dxgiIid, out var accessPtr);
+                try
+                {
+                    var access = (IDirect3DDxgiInterfaceAccess)Marshal.GetObjectForIUnknown(accessPtr);
+                    var textureIid = IID_ID3D11Texture2D;
+                    var ptr = access.GetInterface(ref textureIid);
+                    try
+                    {
+                        var texture = Marshal.GetObjectForIUnknown(ptr) as SharpDX.Direct3D11.Texture2D;
+                        var dxgiSurface = texture!.QueryInterface<SharpDX.DXGI.Surface>();
+                        texture.Dispose();
+                        return dxgiSurface;
+                    }
+                    finally
+                    {
+                        Marshal.Release(ptr);
+                    }
+                }
+                finally
+                {
+                    Marshal.Release(accessPtr);
+                }
+            }
+            finally
+            {
+                Marshal.Release(unkPtr);
+            }
         }
     }
 }
