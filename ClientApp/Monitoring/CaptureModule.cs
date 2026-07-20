@@ -67,6 +67,11 @@ namespace Monitoring
             try
             {
                 filePath = await CaptureMonitorAsync();
+                if (filePath == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Capture] Graphics Capture failed, falling back to CopyFromScreen");
+                    filePath = await CaptureFallbackAsync();
+                }
             }
             finally
             {
@@ -144,6 +149,29 @@ namespace Monitoring
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[Capture] Error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+                return null;
+            }
+        }
+
+        private async Task<string?> CaptureFallbackAsync()
+        {
+            try
+            {
+                var bounds = SystemInformation.VirtualScreen;
+                using var bitmap = new Bitmap(bounds.Width, bounds.Height);
+                using (var g = Graphics.FromImage(bitmap))
+                {
+                    g.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
+                }
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                var filePath = Path.Combine(_logFolder, fileName);
+                await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
+                System.Diagnostics.Debug.WriteLine($"[Capture] Fallback saved: {filePath}");
+                return filePath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Capture] Fallback error: {ex.GetType().Name}: {ex.Message}");
                 return null;
             }
         }
