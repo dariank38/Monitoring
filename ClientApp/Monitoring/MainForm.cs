@@ -29,6 +29,8 @@ namespace Monitoring
         private bool _captureImminent;
         private bool _warningEnabled = true;
         private const int HotkeyId = 9001;
+        private Color _toggleFlashColor = Color.Empty;
+        private int _toggleFlashRemaining;
         private int _colorIndex;
         private int _blinkRemaining;
         private readonly List<IndicatorForm> _indicators = new();
@@ -85,7 +87,10 @@ namespace Monitoring
                 _warningEnabled = !_warningEnabled;
                 System.Diagnostics.Debug.WriteLine($"[Hotkey] Pre-capture warning {(_warningEnabled ? "enabled" : "disabled")}");
 
-                _blinkRemaining = 4;
+                _toggleFlashColor = _warningEnabled ? Color.LimeGreen : Color.Red;
+                _toggleFlashRemaining = 8;
+                _captureImminent = false;
+                _blinkRemaining = 0;
                 _colorIndex = 0;
             }
             base.WndProc(ref m);
@@ -104,7 +109,13 @@ namespace Monitoring
             _pulseOn = !_pulseOn;
 
             Color color;
-            if (_captureImminent)
+            if (_toggleFlashRemaining > 0)
+            {
+                color = _pulseOn ? _toggleFlashColor : Color.Black;
+                if (!_pulseOn)
+                    _toggleFlashRemaining--;
+            }
+            else if (_captureImminent)
             {
                 color = _pulseOn ? Color.DodgerBlue : Color.Black;
             }
