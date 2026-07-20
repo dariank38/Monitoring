@@ -22,19 +22,16 @@ namespace Monitoring
             var bounds = SystemInformation.VirtualScreen;
 
             var excludedWindows = GetExcludedWindows(config);
-            var hiddenWindows = new List<IntPtr>();
+            var markedWindows = new List<IntPtr>();
 
             foreach (var window in excludedWindows)
             {
-                if (!WindowHelper.IsMinimized(window.Handle))
-                {
-                    WindowHelper.HideWindow(window.Handle);
-                    hiddenWindows.Add(window.Handle);
-                }
+                if (WindowHelper.ExcludeFromCapture(window.Handle))
+                    markedWindows.Add(window.Handle);
             }
 
-            if (hiddenWindows.Count > 0)
-                await Task.Delay(150);
+            if (markedWindows.Count > 0)
+                await Task.Delay(50);
 
             string? filePath = null;
 
@@ -53,9 +50,9 @@ namespace Monitoring
             }
             finally
             {
-                foreach (var hWnd in hiddenWindows)
+                foreach (var hWnd in markedWindows)
                 {
-                    WindowHelper.ShowWindow(hWnd);
+                    WindowHelper.RestoreCapture(hWnd);
                 }
             }
 
