@@ -14,7 +14,7 @@ namespace Monitoring
         private readonly System.Windows.Forms.Timer _pulseTimer;
         private readonly ActivityTracker _activityTracker;
         private readonly ServerClient _serverClient;
-        private readonly CaptureModule _captureModule;
+        private CaptureModule _captureModule;
         private bool _isCapturing;
         private bool _pulseOn;
         private readonly List<IndicatorForm> _indicators = new();
@@ -88,6 +88,7 @@ namespace Monitoring
             _pulseTimer.Stop();
             _activityTracker.Dispose();
             _serverClient.Dispose();
+            _captureModule?.Dispose();
             foreach (var indicator in _indicators)
                 indicator.Close();
         }
