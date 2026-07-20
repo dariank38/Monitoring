@@ -8,7 +8,15 @@ namespace Monitoring
     {
         private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const int DefaultIntervalMs = 90_000;
+        private const int IndicatorSize = 16;
         private static readonly Random Rng = new();
+
+        private static readonly Color[] PulseColors =
+        {
+            Color.LimeGreen, Color.Cyan, Color.Magenta, Color.Yellow,
+            Color.HotPink, Color.Orange, Color.MediumPurple, Color.Turquoise
+        };
+        private const int BlinkTicks = 6;
 
         private readonly System.Windows.Forms.Timer _captureTimer;
         private readonly System.Windows.Forms.Timer _pulseTimer;
@@ -16,14 +24,16 @@ namespace Monitoring
         private readonly ServerClient _serverClient;
         private bool _isCapturing;
         private bool _pulseOn;
+        private int _colorIndex;
+        private int _blinkRemaining;
         private readonly List<IndicatorForm> _indicators = new();
 
         public MainForm()
         {
             InitializeComponent();
 
-            Size = new Size(8, 8);
-            ClientSize = new Size(8, 8);
+            Size = new Size(IndicatorSize, IndicatorSize);
+            ClientSize = new Size(IndicatorSize, IndicatorSize);
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.LimeGreen;
 
@@ -70,7 +80,30 @@ namespace Monitoring
         private void PulseTimer_Tick(object? sender, EventArgs e)
         {
             _pulseOn = !_pulseOn;
-            var color = _pulseOn ? Color.LimeGreen : Color.DarkGreen;
+
+            Color color;
+            if (_blinkRemaining > 0)
+            {
+                color = _pulseOn ? Color.White : Color.Black;
+                if (!_pulseOn)
+                    _blinkRemaining--;
+            }
+            else
+            {
+                var baseColor = PulseColors[_colorIndex];
+                color = _pulseOn ? baseColor : ControlPaint.Dark(baseColor);
+
+                if (!_pulseOn)
+                {
+                    _colorIndex++;
+                    if (_colorIndex >= PulseColors.Length)
+                    {
+                        _colorIndex = 0;
+                        _blinkRemaining = BlinkTicks;
+                    }
+                }
+            }
+
             BackColor = color;
 
             var flags = (uint)(NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
@@ -95,7 +128,7 @@ namespace Monitoring
         private async void MainForm_Load(object? sender, EventArgs e)
         {
             var primary = Screen.PrimaryScreen!;
-            SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - 8, 8, 8);
+            SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - IndicatorSize, IndicatorSize, IndicatorSize);
 
             _activityTracker.Start();
             _serverClient.Start();
