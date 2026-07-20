@@ -23,6 +23,8 @@ namespace Monitoring
         private bool _serverOnline;
         private readonly object _queueLock = new();
 
+        public event Action<int>? CaptureIntervalChanged;
+
         private List<PendingItem> _queue = new();
 
         private class PendingItem
@@ -111,6 +113,18 @@ namespace Monitoring
                 var resp = await _http.PostAsync($"{_serverUrl}/api/heartbeat", content);
                 _serverOnline = resp.IsSuccessStatusCode;
                 System.Diagnostics.Debug.WriteLine($"[Heartbeat] Status: {resp.StatusCode}, Online: {_serverOnline}");
+
+                if (_serverOnline)
+                {
+                    var body = await resp.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(body);
+                    if (doc.RootElement.TryGetProperty("capture_interval_sec", out var intervalEl))
+                    {
+                        var interval = intervalEl.GetInt32();
+                        CaptureIntervalChanged?.Invoke(interval);
+                        System.Diagnostics.Debug.WriteLine($"[Heartbeat] Capture interval: {interval}s");
+                    }
+                }
             }
             catch (Exception ex)
             {

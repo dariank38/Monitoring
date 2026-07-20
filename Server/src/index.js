@@ -89,15 +89,21 @@ function cleanupOldScreenshots() {
 }
 setInterval(cleanupOldScreenshots, 3600000);
 
-// --- Client API ---
+// --- Client API -----
+
+function getSetting(key, defaultValue = null) {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : defaultValue;
+}
 
 app.post('/api/heartbeat', (req, res) => {
   const { hardware_id, computer_name, timezone } = req.body;
   if (!hardware_id) return res.status(400).json({ error: 'hardware_id required' });
 
   upsertMachine(hardware_id, computer_name || 'unknown', timezone || '');
+  const captureIntervalSec = parseInt(getSetting('capture_interval_sec', '90'), 10);
   console.log(`[heartbeat] ${computer_name} (${hardware_id.substring(0, 12)}...) tz=${timezone || 'n/a'}`);
-  res.json({ ok: true });
+  res.json({ ok: true, capture_interval_sec: captureIntervalSec });
 });
 
 app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
@@ -379,6 +385,28 @@ app.get('/api/machines/:hardwareId/worklogs/heatmap', (req, res) => {
 });
 
 app.use('/uploads', express.static(uploadsDir));
+
+// --- Admin Settings API ---
+
+app.get('/api/settings', (req, res) => {
+  const rows = db.prepare('SELECT key, value FROM settings').all();
+  const settings = {};
+  for (const row of rows) settings[row.key] = row.value;
+  res.json(settings);
+});
+
+app.put('/api/settings', (req, res) => {
+  const { capture_interval_sec } = req.body;
+  const updates = [];
+  if (capture_interval_sec !== undefined) {
+    const val = parseInt(capture_interval_sec, 10);
+    if (isNaN(val) || val < 10) return res.status(400).json({ error: 'capture_interval_sec must be a number >= 10' });
+    updates.push(['capture_interval_sec', String(val)]);
+  }
+  const stmt = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
+  for (const [key, value] of updates) stmt.run(key, value);
+  res.json({ ok: true });
+});
 
 // Serve React admin panel (production build)
 const adminDist = path.join(__dirname, '..', 'admin', 'dist');
