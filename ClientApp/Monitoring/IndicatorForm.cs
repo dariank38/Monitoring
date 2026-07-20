@@ -12,11 +12,11 @@ namespace Monitoring
             _screen = screen;
 
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(16, 16);
+            ClientSize = new Size(10, 10);
             ControlBox = false;
             FormBorderStyle = FormBorderStyle.None;
-            MaximumSize = new Size(16, 16);
-            MinimumSize = new Size(16, 16);
+            MaximumSize = new Size(10, 10);
+            MinimumSize = new Size(10, 10);
             Opacity = 1D;
             ShowIcon = false;
             ShowInTaskbar = false;
@@ -25,13 +25,13 @@ namespace Monitoring
             TopMost = true;
             BackColor = Color.LimeGreen;
 
-            Size = new Size(16, 16);
+            Size = new Size(10, 10);
         }
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            SetBounds(_screen.Bounds.Left, _screen.Bounds.Bottom - 16, 16, 16);
+            SetBounds(_screen.Bounds.Left, _screen.Bounds.Bottom - 10, 10, 10);
         }
 
         private void InitializeComponent()
