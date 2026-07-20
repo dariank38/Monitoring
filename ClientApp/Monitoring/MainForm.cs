@@ -183,6 +183,12 @@ namespace Monitoring
 
             try
             {
+                if (_captureModule == null)
+                {
+                    LogError("CaptureScreen", "_captureModule is null, skipping capture");
+                    return;
+                }
+
                 var filePath = await _captureModule.CaptureAsync();
 
                 if (filePath != null)
@@ -196,16 +202,36 @@ namespace Monitoring
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    $"Screen capture failed:\n{ex.Message}",
-                    "Monitoring Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                LogError("CaptureScreen", ex);
             }
             finally
             {
                 _isCapturing = false;
             }
+        }
+
+        private static void LogError(string context, Exception ex)
+        {
+            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n";
+            System.Diagnostics.Debug.WriteLine(msg);
+            try
+            {
+                Directory.CreateDirectory(LogFolder);
+                File.AppendAllText(Path.Combine(LogFolder, "error.log"), msg + "\n");
+            }
+            catch { }
+        }
+
+        private static void LogError(string context, string message)
+        {
+            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {message}";
+            System.Diagnostics.Debug.WriteLine(msg);
+            try
+            {
+                Directory.CreateDirectory(LogFolder);
+                File.AppendAllText(Path.Combine(LogFolder, "error.log"), msg + "\n");
+            }
+            catch { }
         }
     }
 }
