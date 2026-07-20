@@ -107,7 +107,7 @@ namespace Monitoring
             CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.NativePointer, out var pUnknown);
             try
             {
-                return MarshalInspectable<IDirect3DDevice>.FromAbi(pUnknown);
+                return MarshalInterface<IDirect3DDevice>.FromAbi(pUnknown);
             }
             finally
             {

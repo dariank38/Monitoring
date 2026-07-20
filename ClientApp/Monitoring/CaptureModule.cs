@@ -70,82 +70,100 @@ namespace Monitoring
 
         private async Task<string?> CaptureMonitorAsync()
         {
-            _d3dDevice ??= GraphicsCaptureHelper.CreateD3DDevice();
+            Direct3D11CaptureFramePool? framePool = null;
+            Windows.Graphics.Capture.GraphicsCaptureSession? session = null;
 
-            var item = GraphicsCaptureHelper.CreateItemForMonitor(_hwnd);
-            if (item == null)
+            try
             {
-                System.Diagnostics.Debug.WriteLine("[Capture] Failed to create GraphicsCaptureItem");
-                return null;
-            }
-
-            var size = item.Size;
-            System.Diagnostics.Debug.WriteLine($"[Capture] Item size: {size.Width}x{size.Height}");
-
-            using var framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
-                _d3dDevice,
-                DirectXPixelFormat.B8G8R8A8UIntNormalized,
-                1,
-                size);
-
-            using var session = framePool.CreateCaptureSession(item);
-
-            var tcs = new TaskCompletionSource<Direct3D11CaptureFrame?>();
-
-            void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
-            {
-                try
+                if (_d3dDevice == null)
                 {
-                    var frame = sender.TryGetNextFrame();
-                    tcs.TrySetResult(frame);
+                    System.Diagnostics.Debug.WriteLine("[Capture] Creating D3D device...");
+                    _d3dDevice = GraphicsCaptureHelper.CreateD3DDevice();
+                    System.Diagnostics.Debug.WriteLine("[Capture] D3D device created");
                 }
-                catch (Exception ex)
+
+                var item = GraphicsCaptureHelper.CreateItemForMonitor(_hwnd);
+                if (item == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Capture] FrameArrived error: {ex.Message}");
-                    tcs.TrySetResult(null);
+                    System.Diagnostics.Debug.WriteLine("[Capture] Failed to create GraphicsCaptureItem");
+                    return null;
+                }
+
+                var size = item.Size;
+                System.Diagnostics.Debug.WriteLine($"[Capture] Item size: {size.Width}x{size.Height}");
+
+                framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
+                    _d3dDevice,
+                    DirectXPixelFormat.B8G8R8A8UIntNormalized,
+                    1,
+                    size);
+
+                session = framePool.CreateCaptureSession(item);
+
+                var tcs = new TaskCompletionSource<Direct3D11CaptureFrame?>();
+
+                void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
+                {
+                    try
+                    {
+                        var frame = sender.TryGetNextFrame();
+                        tcs.TrySetResult(frame);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Capture] FrameArrived error: {ex.Message}");
+                        tcs.TrySetResult(null);
+                    }
+                }
+
+                framePool.FrameArrived += OnFrameArrived;
+                session.StartCapture();
+                System.Diagnostics.Debug.WriteLine("[Capture] Session started, waiting for frame...");
+
+                var captureTask = tcs.Task;
+                var timeoutTask = Task.Delay(5000);
+                var completed = await Task.WhenAny(captureTask, timeoutTask);
+
+                framePool.FrameArrived -= OnFrameArrived;
+
+                if (completed != captureTask)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Capture] Timed out waiting for frame");
+                    return null;
+                }
+
+                var capturedFrame = await captureTask;
+                if (capturedFrame == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Capture] No frame received");
+                    return null;
+                }
+
+                using (capturedFrame)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Capture] Frame received, converting to bitmap...");
+                    var bitmap = ConvertFrameToBitmap(capturedFrame, size, _d3dDevice);
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Bitmap created: {bitmap.Width}x{bitmap.Height}");
+
+                    var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                    var resultPath = Path.Combine(_logFolder, fileName);
+
+                    await Task.Run(() => bitmap.Save(resultPath, ImageFormat.Png));
+                    bitmap.Dispose();
+
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
+                    return resultPath;
                 }
             }
-
-            framePool.FrameArrived += OnFrameArrived;
-            session.StartCapture();
-
-            var captureTask = tcs.Task;
-            var timeoutTask = Task.Delay(5000);
-            var completed = await Task.WhenAny(captureTask, timeoutTask);
-
-            framePool.FrameArrived -= OnFrameArrived;
-
-            if (completed != captureTask)
+            catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("[Capture] Timed out waiting for frame");
-                session.Dispose();
-                framePool.Dispose();
+                System.Diagnostics.Debug.WriteLine($"[Capture] Error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
                 return null;
             }
-
-            var capturedFrame = await captureTask;
-            session.Dispose();
-            framePool.Dispose();
-
-            if (capturedFrame == null)
+            finally
             {
-                System.Diagnostics.Debug.WriteLine("[Capture] No frame received");
-                return null;
-            }
-
-            using (capturedFrame)
-            {
-                var bitmap = ConvertFrameToBitmap(capturedFrame, size, _d3dDevice!);
-                System.Diagnostics.Debug.WriteLine($"[Capture] Bitmap created: {bitmap.Width}x{bitmap.Height}");
-
-                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                var resultPath = Path.Combine(_logFolder, fileName);
-
-                await Task.Run(() => bitmap.Save(resultPath, ImageFormat.Png));
-                bitmap.Dispose();
-
-                System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
-                return resultPath;
+                session?.Dispose();
+                framePool?.Dispose();
             }
         }
 
