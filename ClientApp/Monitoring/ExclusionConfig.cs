@@ -6,10 +6,7 @@ namespace Monitoring
     {
         public List<string> ExcludedProcesses { get; set; } = new();
         public List<string> ExcludedSites { get; set; } = new();
-        public List<string> BrowserProcessNames { get; set; } = new()
-        {
-            "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe"
-        };
+        public List<string> BrowserProcessNames { get; set; } = new();
 
         public const string DefaultConfigPath = Path.Combine(AppContext.BaseDirectory, "Logs", "exclusions.json");
 
