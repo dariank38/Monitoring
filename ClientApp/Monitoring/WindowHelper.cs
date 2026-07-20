@@ -9,6 +9,7 @@ namespace Monitoring
         public string ProcessName { get; set; } = "";
         public string Title { get; set; } = "";
         public Rectangle Bounds { get; set; }
+        public bool IsSiteExclusion { get; set; }
     }
 
     public static class WindowHelper
@@ -47,6 +48,8 @@ namespace Monitoring
 
         private const int SW_HIDE = 0;
         private const int SW_SHOW = 5;
+        private const int SW_MINIMIZE = 6;
+        private const int SW_RESTORE = 9;
 
         public const uint WDA_NONE = 0x00000000;
         public const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
@@ -112,6 +115,16 @@ namespace Monitoring
         public static void ShowWindow(IntPtr hWnd)
         {
             ShowWindow(hWnd, SW_SHOW);
+        }
+
+        public static void MinimizeWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, SW_MINIMIZE);
+        }
+
+        public static void RestoreWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, SW_RESTORE);
         }
 
         public static bool IsMinimized(IntPtr hWnd)

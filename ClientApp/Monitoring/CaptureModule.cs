@@ -35,19 +35,27 @@ namespace Monitoring
 
             foreach (var window in excludedWindows)
             {
-                if (WindowHelper.ExcludeFromCapture(window.Handle))
+                if (window.IsSiteExclusion)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Site exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
+                    WindowHelper.HideWindow(window.Handle);
+                    hiddenWindows.Add(window.Handle);
+                }
+                else if (WindowHelper.ExcludeFromCapture(window.Handle))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: affinity {window.ProcessName} - \"{window.Title}\"");
                     affinityWindows.Add(window.Handle);
                 }
                 else
                 {
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
                     WindowHelper.HideWindow(window.Handle);
                     hiddenWindows.Add(window.Handle);
                 }
             }
 
             if (affinityWindows.Count > 0 || hiddenWindows.Count > 0)
-                await Task.Delay(50);
+                await Task.Delay(200);
 
             string? filePath = null;
 
@@ -220,6 +228,7 @@ namespace Monitoring
             foreach (var window in windows)
             {
                 var excluded = false;
+                var isSite = false;
 
                 if (config.IsProcessExcluded(window.ProcessName))
                 {
@@ -230,11 +239,17 @@ namespace Monitoring
                 {
                     var isBrowser = config.BrowserProcessNames.Count == 0 || config.IsBrowserProcess(window.ProcessName);
                     if (isBrowser && config.IsSiteExcluded(window.Title))
+                    {
                         excluded = true;
+                        isSite = true;
+                    }
                 }
 
                 if (excluded)
+                {
+                    window.IsSiteExclusion = isSite;
                     result.Add(window);
+                }
             }
 
             return result;

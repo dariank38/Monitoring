@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Grid, Film, Loader2, Calendar, X } from 'lucide-react'
 import { fetchMachine, fetchScreenshots, fetchHeatmap, fetchWorkLogSummary, screenshotUrl, thumbnailUrl } from '../lib/api'
-import { formatDuration, formatDateTime, isOnline, cn } from '../lib/utils'
+import { formatDuration, formatDateTime, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 import HeatmapTimeline from '../components/HeatmapTimeline.jsx'
 import ScreenshotSlider from '../components/ScreenshotSlider.jsx'
 import ImageModal from '../components/ImageModal.jsx'
@@ -286,7 +286,8 @@ export default function MachineDetail() {
                       />
                       <div className="p-2">
                         <div className="text-xs text-slate-500 truncate">{s.filename}</div>
-                        <div className="text-xs text-slate-400 mt-0.5">{formatDateTime(s.captured_at)}</div>
+                        <div className="text-xs text-slate-600 mt-0.5">🇱🇦 {formatDateTimeLaos(s.captured_at)}</div>
+                        <div className="text-[10px] text-slate-400">💻 {formatDateTimeClientTZ(s.captured_at, machine.timezone)}</div>
                       </div>
                     </div>
                   ))}
@@ -302,6 +303,7 @@ export default function MachineDetail() {
                 screenshots={screenshots}
                 onClose={filterDate ? clearFilter : undefined}
                 onImageClick={setModalIndex}
+                timezone={machine.timezone}
               />
             )}
           </div>
@@ -358,6 +360,7 @@ export default function MachineDetail() {
           index={modalIndex}
           onClose={() => setModalIndex(null)}
           onNavigate={setModalIndex}
+          timezone={machine.timezone}
         />
       )}
     </div>

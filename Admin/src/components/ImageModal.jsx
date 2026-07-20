@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { X, ZoomIn, ZoomOut, Maximize, ChevronLeft, ChevronRight } from 'lucide-react'
 import { screenshotUrl } from '../lib/api'
-import { formatDateTime, cn } from '../lib/utils'
+import { formatDateTimeLaos, formatDateTimeClientTZ, cn } from '../lib/utils'
 
-export default function ImageModal({ screenshots, index, onClose, onNavigate }) {
+export default function ImageModal({ screenshots, index, onClose, onNavigate, timezone }) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
@@ -68,7 +68,8 @@ export default function ImageModal({ screenshots, index, onClose, onNavigate }) 
           <span className="text-sm font-medium">
             {index + 1} / {screenshots.length}
           </span>
-          <span className="text-sm text-white/60">{formatDateTime(current.captured_at)}</span>
+          <span className="text-sm text-white/60">🇱🇺 {formatDateTimeLaos(current.captured_at)}</span>
+          <span className="text-xs text-white/40">💻 {formatDateTimeClientTZ(current.captured_at, timezone)}</span>
         </div>
         <div className="flex items-center gap-1">
           <button

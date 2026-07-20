@@ -16,6 +16,7 @@ namespace Monitoring
         private readonly HttpClient _http;
         private readonly string _hardwareId;
         private readonly string _computerName;
+        private readonly string _timezone;
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private bool _serverOnline;
         private readonly object _queueLock = new();
@@ -36,9 +37,13 @@ namespace Monitoring
             _hardwareId = HardwareId.GetHardwareId();
             _computerName = HardwareId.GetComputerName();
 
+            var tz = TimeZoneInfo.Local;
+            _timezone = tz.Id;
+
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             _http.DefaultRequestHeaders.Add("X-Hardware-Id", _hardwareId);
             _http.DefaultRequestHeaders.Add("X-Computer-Name", _computerName);
+            _http.DefaultRequestHeaders.Add("X-Timezone", _timezone);
 
             _heartbeatTimer = new System.Windows.Forms.Timer
             {
@@ -69,7 +74,8 @@ namespace Monitoring
                 var json = JsonSerializer.Serialize(new
                 {
                     hardware_id = _hardwareId,
-                    computer_name = _computerName
+                    computer_name = _computerName,
+                    timezone = _timezone
                 });
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var resp = await _http.PostAsync($"{ServerUrl}/api/heartbeat", content);

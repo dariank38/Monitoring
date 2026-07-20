@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Monitor, Circle, Camera, Clock } from 'lucide-react'
 import { fetchMachines, thumbnailUrl } from '../lib/api'
-import { formatDuration, formatDateTime, isOnline, cn } from '../lib/utils'
+import { formatDuration, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 
 export default function Dashboard() {
   const [machines, setMachines] = useState([])
@@ -89,8 +89,9 @@ export default function Dashboard() {
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
                         <span>{formatDuration(m.total_active_sec)}</span>
                       </div>
-                      <span className="ml-auto text-slate-400">
-                        {formatDateTime(m.last_seen)}
+                      <span className="ml-auto text-slate-400 text-right">
+                        <div className="text-xs">🇱🇦 {formatDateTimeLaos(m.last_seen)}</div>
+                        <div className="text-[10px] text-slate-400">💻 {formatDateTimeClientTZ(m.last_seen, m.timezone)}</div>
                       </span>
                     </div>
                   </div>

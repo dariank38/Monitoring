@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Camera, X } from 'lucide-react'
 import { screenshotUrl, thumbnailUrl } from '../lib/api'
-import { formatDateTime, cn } from '../lib/utils'
+import { formatDateTimeLaos, formatDateTimeClientTZ, cn } from '../lib/utils'
 
-export default function ScreenshotSlider({ screenshots, onClose, onImageClick }) {
+export default function ScreenshotSlider({ screenshots, onClose, onImageClick, timezone }) {
   const [index, setIndex] = useState(0)
   const containerRef = useRef(null)
 
@@ -50,7 +50,8 @@ export default function ScreenshotSlider({ screenshots, onClose, onImageClick })
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500">{formatDateTime(current.captured_at)}</span>
+          <span className="text-sm text-slate-600">🇱🇦 {formatDateTimeLaos(current.captured_at)}</span>
+          <span className="text-xs text-slate-400">💻 {formatDateTimeClientTZ(current.captured_at, timezone)}</span>
           {onClose && (
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
               <X className="w-4 h-4" />
