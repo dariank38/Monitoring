@@ -7,8 +7,7 @@ namespace Monitoring
     public partial class MainForm : Form
     {
         private const string LogFolder = @"D:\ScreenLogs";
-        private const int MinIntervalMs = 60_000;
-        private const int MaxIntervalMs = 120_000;
+        private const int DefaultIntervalMs = 90_000;
         private static readonly Random Rng = new();
 
         private readonly System.Windows.Forms.Timer _captureTimer;
@@ -30,6 +29,7 @@ namespace Monitoring
 
             _activityTracker = new ActivityTracker();
             _serverClient = new ServerClient();
+            _serverClient.CaptureIntervalChanged += OnCaptureIntervalChanged;
 
             foreach (var screen in Screen.AllScreens)
             {
@@ -43,7 +43,7 @@ namespace Monitoring
 
             _captureTimer = new System.Windows.Forms.Timer
             {
-                Interval = Rng.Next(MinIntervalMs, MaxIntervalMs + 1)
+                Interval = DefaultIntervalMs
             };
             _captureTimer.Tick += CaptureTimer_Tick;
 
@@ -105,11 +105,21 @@ namespace Monitoring
             _captureTimer.Start();
         }
 
+        private void OnCaptureIntervalChanged(int intervalSec)
+        {
+            if (intervalSec < 10) return;
+            var newInterval = intervalSec * 1000;
+            if (_captureTimer.Interval != newInterval)
+            {
+                _captureTimer.Interval = newInterval;
+                System.Diagnostics.Debug.WriteLine($"[Capture] Interval updated to {intervalSec}s");
+            }
+        }
+
         private async void CaptureTimer_Tick(object? sender, EventArgs e)
         {
             _captureTimer.Stop();
             await CaptureScreenAsync();
-            _captureTimer.Interval = Rng.Next(MinIntervalMs, MaxIntervalMs + 1);
             _captureTimer.Start();
         }
 

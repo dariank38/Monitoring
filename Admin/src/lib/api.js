@@ -58,3 +58,17 @@ export function screenshotUrl(id) {
 export function thumbnailUrl(id) {
   return `${API_BASE}/api/screenshots/${id}/thumbnail`
 }
+
+export async function fetchSettings() {
+  const res = await fetch(`${API_BASE}/api/settings`)
+  return res.json()
+}
+
+export async function updateSettings(settings) {
+  const res = await fetch(`${API_BASE}/api/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  })
+  return res.json()
+}

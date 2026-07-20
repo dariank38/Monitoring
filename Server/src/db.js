@@ -42,6 +42,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_worklogs_hw_date ON work_logs(hardware_id, log_date);
 `);
 
+// Settings table for global configuration (capture interval, etc.)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`);
+
+// Default settings
+db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('capture_interval_sec', '90')`).run();
+
 // Migration: add timezone column if missing (for existing databases)
 try {
   db.exec(`ALTER TABLE machines ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`);

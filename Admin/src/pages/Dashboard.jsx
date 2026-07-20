@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Monitor, Circle, Camera, Clock } from 'lucide-react'
+import { Monitor, Circle, Camera, Clock, Settings as SettingsIcon } from 'lucide-react'
 import { fetchMachines, thumbnailUrl } from '../lib/api'
 import { formatDuration, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 
@@ -33,6 +33,9 @@ export default function Dashboard() {
           <span className="ml-auto text-sm text-slate-500">
             {machines.length} machine{machines.length !== 1 ? 's' : ''}
           </span>
+          <Link to="/settings" className="text-slate-400 hover:text-slate-700 ml-2">
+            <SettingsIcon className="w-5 h-5" />
+          </Link>
         </div>
       </header>
 
