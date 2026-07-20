@@ -27,6 +27,8 @@ namespace Monitoring
         private bool _isCapturing;
         private bool _pulseOn;
         private bool _captureImminent;
+        private bool _warningEnabled = true;
+        private const int HotkeyId = 9001;
         private int _colorIndex;
         private int _blinkRemaining;
         private readonly List<IndicatorForm> _indicators = new();
@@ -70,6 +72,23 @@ namespace Monitoring
             Load += MainForm_Load;
             FormClosed += MainForm_FormClosed;
             DoubleClick += MainForm_DoubleClick;
+
+            NativeMethods.RegisterHotKey(Handle, HotkeyId,
+                NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_ALT,
+                (uint)Keys.D0);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == NativeMethods.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
+            {
+                _warningEnabled = !_warningEnabled;
+                System.Diagnostics.Debug.WriteLine($"[Hotkey] Pre-capture warning {(_warningEnabled ? "enabled" : "disabled")}");
+
+                _blinkRemaining = 4;
+                _colorIndex = 0;
+            }
+            base.WndProc(ref m);
         }
 
         private void MainForm_DoubleClick(object? sender, EventArgs e)
@@ -125,6 +144,7 @@ namespace Monitoring
 
         private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
         {
+            NativeMethods.UnregisterHotKey(Handle, HotkeyId);
             _pulseTimer.Stop();
             _activityTracker.Dispose();
             _serverClient.Dispose();
@@ -163,12 +183,15 @@ namespace Monitoring
         {
             _captureTimer.Stop();
 
-            _captureImminent = true;
-            _pulseTimer.Interval = 200;
-            System.Diagnostics.Debug.WriteLine($"[Capture] Warning: capture in {WarningMs / 1000}s");
-            await Task.Delay(WarningMs);
-            _captureImminent = false;
-            _pulseTimer.Interval = 1000;
+            if (_warningEnabled)
+            {
+                _captureImminent = true;
+                _pulseTimer.Interval = 200;
+                System.Diagnostics.Debug.WriteLine($"[Capture] Warning: capture in {WarningMs / 1000}s");
+                await Task.Delay(WarningMs);
+                _captureImminent = false;
+                _pulseTimer.Interval = 1000;
+            }
 
             await CaptureScreenAsync();
             _captureTimer.Start();

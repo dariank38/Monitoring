@@ -339,5 +339,18 @@ namespace Monitoring
         [LibraryImport("user32.dll", EntryPoint = "SetWindowPos")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        internal const uint MOD_ALT = 0x0001;
+        internal const uint MOD_CONTROL = 0x0002;
+        internal const uint MOD_SHIFT = 0x0004;
+        internal const int WM_HOTKEY = 0x0312;
     }
 }
