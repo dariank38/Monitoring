@@ -8,7 +8,8 @@ namespace Monitoring
 {
     public sealed class ServerClient : IDisposable
     {
-        private const string ServerUrl = "http://localhost:3000";
+        private const string ConfigFile = @"D:\ScreenLogs\config.json";
+        private const string DefaultServerUrl = "http://localhost:3000";
         private const int HeartbeatIntervalSec = 30;
         private const string QueueFile = @"D:\ScreenLogs\sync_queue.json";
         private const string SentLogMarker = @"D:\ScreenLogs\last_sent_log.txt";
@@ -17,6 +18,7 @@ namespace Monitoring
         private readonly string _hardwareId;
         private readonly string _computerName;
         private readonly string _timezone;
+        private readonly string _serverUrl;
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private bool _serverOnline;
         private readonly object _queueLock = new();
@@ -40,6 +42,8 @@ namespace Monitoring
             var tz = TimeZoneInfo.Local;
             _timezone = tz.Id;
 
+            _serverUrl = LoadServerUrl();
+
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             _http.DefaultRequestHeaders.Add("X-Hardware-Id", _hardwareId);
             _http.DefaultRequestHeaders.Add("X-Computer-Name", _computerName);
@@ -52,6 +56,32 @@ namespace Monitoring
             _heartbeatTimer.Tick += async (_, _) => await HeartbeatTickAsync();
 
             LoadQueue();
+        }
+
+        private static string LoadServerUrl()
+        {
+            try
+            {
+                if (File.Exists(ConfigFile))
+                {
+                    var json = File.ReadAllText(ConfigFile);
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("server_url", out var urlEl) &&
+                        urlEl.ValueKind == JsonValueKind.String)
+                    {
+                        var url = urlEl.GetString()!.TrimEnd('/');
+                        System.Diagnostics.Debug.WriteLine($"[ServerClient] Server URL from config: {url}");
+                        return url;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ServerClient] Failed to read config: {ex.Message}");
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ServerClient] Using default server URL: {DefaultServerUrl}");
+            return DefaultServerUrl;
         }
 
         public void Start()
@@ -78,7 +108,7 @@ namespace Monitoring
                     timezone = _timezone
                 });
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var resp = await _http.PostAsync($"{ServerUrl}/api/heartbeat", content);
+                var resp = await _http.PostAsync($"{_serverUrl}/api/heartbeat", content);
                 _serverOnline = resp.IsSuccessStatusCode;
                 System.Diagnostics.Debug.WriteLine($"[Heartbeat] Status: {resp.StatusCode}, Online: {_serverOnline}");
             }
@@ -228,7 +258,7 @@ namespace Monitoring
             form.Add(fileContent, "screenshot", Path.GetFileName(filePath));
             form.Add(new StringContent(capturedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")), "captured_at");
 
-            var resp = await _http.PostAsync($"{ServerUrl}/api/screenshots", form);
+            var resp = await _http.PostAsync($"{_serverUrl}/api/screenshots", form);
             resp.EnsureSuccessStatusCode();
         }
 
@@ -236,7 +266,7 @@ namespace Monitoring
         {
             var wrapped = $"{{\"logs\":{logsJson}}}";
             var content = new StringContent(wrapped, Encoding.UTF8, "application/json");
-            var resp = await _http.PostAsync($"{ServerUrl}/api/worklogs", content);
+            var resp = await _http.PostAsync($"{_serverUrl}/api/worklogs", content);
             resp.EnsureSuccessStatusCode();
         }
 
