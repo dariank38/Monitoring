@@ -21,38 +21,53 @@ namespace Monitoring
             var config = ExclusionConfig.Load(_configPath);
             var bounds = SystemInformation.VirtualScreen;
 
-            using var bitmap = new Bitmap(bounds.Width, bounds.Height);
-            using (var graphics = Graphics.FromImage(bitmap))
-            {
-                graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
-            }
+            var excludedWindows = GetExcludedWindows(config);
+            var hiddenWindows = new List<IntPtr>();
 
-            var excludedRects = GetExcludedWindowRects(bounds, config);
-
-            if (excludedRects.Count > 0)
+            foreach (var window in excludedWindows)
             {
-                using var g = Graphics.FromImage(bitmap);
-                using var brush = new SolidBrush(Color.Black);
-                foreach (var rect in excludedRects)
+                if (!WindowHelper.IsMinimized(window.Handle))
                 {
-                    g.FillRectangle(brush, rect);
+                    WindowHelper.HideWindow(window.Handle);
+                    hiddenWindows.Add(window.Handle);
                 }
             }
 
-            var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-            var filePath = Path.Combine(_logFolder, fileName);
+            if (hiddenWindows.Count > 0)
+                await Task.Delay(150);
 
-            await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
+            string? filePath = null;
+
+            try
+            {
+                using var bitmap = new Bitmap(bounds.Width, bounds.Height);
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
+                }
+
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                filePath = Path.Combine(_logFolder, fileName);
+
+                await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
+            }
+            finally
+            {
+                foreach (var hWnd in hiddenWindows)
+                {
+                    WindowHelper.ShowWindow(hWnd);
+                }
+            }
 
             return filePath;
         }
 
-        private static List<Rectangle> GetExcludedWindowRects(Rectangle screenBounds, ExclusionConfig config)
+        private static List<WindowInfo> GetExcludedWindows(ExclusionConfig config)
         {
-            var rects = new List<Rectangle>();
+            var result = new List<WindowInfo>();
 
             if (config.ExcludedProcesses.Count == 0 && config.ExcludedSites.Count == 0)
-                return rects;
+                return result;
 
             var windows = WindowHelper.GetVisibleWindows();
 
@@ -71,16 +86,11 @@ namespace Monitoring
                         excluded = true;
                 }
 
-                if (!excluded)
-                    continue;
-
-                var rect = window.Bounds;
-                rect.Intersect(screenBounds);
-                if (rect.Width > 0 && rect.Height > 0)
-                    rects.Add(rect);
+                if (excluded)
+                    result.Add(window);
             }
 
-            return rects;
+            return result;
         }
     }
 }

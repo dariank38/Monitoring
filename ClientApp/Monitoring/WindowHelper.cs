@@ -33,6 +33,18 @@ namespace Monitoring
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsIconic(IntPtr hWnd);
+
+        private const int SW_HIDE = 0;
+        private const int SW_SHOW = 5;
+        private const int SW_RESTORE = 9;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -84,6 +96,21 @@ namespace Monitoring
             }, IntPtr.Zero);
 
             return windows;
+        }
+
+        public static void HideWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, SW_HIDE);
+        }
+
+        public static void ShowWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, SW_SHOW);
+        }
+
+        public static bool IsMinimized(IntPtr hWnd)
+        {
+            return IsIconic(hWnd);
         }
     }
 }
