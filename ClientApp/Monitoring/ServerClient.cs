@@ -22,8 +22,11 @@ namespace Monitoring
         private readonly string _serverUrl;
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private bool _serverOnline;
+        private bool _heartbeatRunning;
+        private bool _flushRunning;
         private readonly object _queueLock = new();
         private static readonly string ErrorLogFile = Path.Combine(LogFolder, "error.log");
+        private const int MaxQueuedScreenshots = 50;
 
         public event Action<int>? CaptureIntervalChanged;
 
@@ -81,7 +84,7 @@ namespace Monitoring
             {
                 Interval = HeartbeatIntervalSec * 1000
             };
-            _heartbeatTimer.Tick += async (_, _) => await HeartbeatTickAsync();
+            _heartbeatTimer.Tick += (_, _) => _ = RunSafeAsync(HeartbeatTickAsync, "HeartbeatTimer");
 
             LoadQueue();
         }
@@ -116,7 +119,7 @@ namespace Monitoring
 
         public void Start()
         {
-            _ = HeartbeatTickAsync();
+            _ = RunSafeAsync(HeartbeatTickAsync, "Start");
             _heartbeatTimer.Start();
         }
 
@@ -127,6 +130,10 @@ namespace Monitoring
 
         private async Task HeartbeatTickAsync()
         {
+            if (_heartbeatRunning)
+                return;
+            _heartbeatRunning = true;
+
             var wasOnline = _serverOnline;
 
             try
@@ -160,9 +167,16 @@ namespace Monitoring
                 LogError("Heartbeat", ex);
             }
 
-            if (_serverOnline && (!wasOnline || _queue.Count > 0))
+            try
             {
-                _ = FlushQueueAsync();
+                if (_serverOnline && (!wasOnline || _queue.Count > 0))
+                {
+                    _ = RunSafeAsync(FlushQueueAsync, "FlushQueue");
+                }
+            }
+            finally
+            {
+                _heartbeatRunning = false;
             }
         }
 
@@ -173,6 +187,7 @@ namespace Monitoring
                 try
                 {
                     await PostScreenshotAsync(filePath, capturedAt);
+                    TryDeleteFile(filePath);
                     return;
                 }
                 catch (Exception ex)
@@ -183,6 +198,18 @@ namespace Monitoring
 
             lock (_queueLock)
             {
+                var queuedScreenshots = _queue.Count(q => q.Type == "screenshot");
+                if (queuedScreenshots >= MaxQueuedScreenshots)
+                {
+                    var oldest = _queue.FirstOrDefault(q => q.Type == "screenshot");
+                    if (oldest != null && oldest.FilePath != null)
+                    {
+                        TryDeleteFile(oldest.FilePath);
+                        _queue.Remove(oldest);
+                    }
+                    LogError("UploadScreenshot", $"Queue full ({MaxQueuedScreenshots} screenshots), dropped oldest");
+                }
+
                 _queue.Add(new PendingItem
                 {
                     Type = "screenshot",
@@ -198,51 +225,64 @@ namespace Monitoring
             if (logs.Count == 0)
                 return;
 
-            var lastSentLine = GetLastSentLogLine();
-            var newLogs = logs.Skip(lastSentLine).ToList();
-
-            if (newLogs.Count == 0)
-                return;
-
-            var logsJson = JsonSerializer.Serialize(newLogs.Select(l => new
+            try
             {
-                date = l.Date,
-                start = l.Start,
-                end = l.End,
-                duration_sec = l.DurationSec,
-                status = l.Status,
-                key_count = l.KeyCount,
-                mouse_count = l.MouseCount
-            }));
+                var lastSentLine = GetLastSentLogLine();
+                var newLogs = logs.Skip(lastSentLine).ToList();
 
-            if (_serverOnline)
-            {
-                try
-                {
-                    await PostWorkLogsAsync(logsJson);
-                    SetLastSentLogLine(lastSentLine + newLogs.Count);
+                if (newLogs.Count == 0)
                     return;
-                }
-                catch (Exception ex)
+
+                var logsJson = JsonSerializer.Serialize(newLogs.Select(l => new
                 {
-                    LogError("UploadWorkLogs", ex);
+                    date = l.Date,
+                    start = l.Start,
+                    end = l.End,
+                    duration_sec = l.DurationSec,
+                    status = l.Status,
+                    key_count = l.KeyCount,
+                    mouse_count = l.MouseCount
+                }));
+
+                if (_serverOnline)
+                {
+                    try
+                    {
+                        await PostWorkLogsAsync(logsJson);
+                        SetLastSentLogLine(lastSentLine + newLogs.Count);
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogError("UploadWorkLogs", ex);
+                    }
+                }
+
+                lock (_queueLock)
+                {
+                    _queue.Add(new PendingItem
+                    {
+                        Type = "worklogs",
+                        LogsJson = logsJson,
+                        LogCount = newLogs.Count
+                    });
+                    SaveQueue();
                 }
             }
-
-            lock (_queueLock)
+            catch (Exception ex)
             {
-                _queue.Add(new PendingItem
-                {
-                    Type = "worklogs",
-                    LogsJson = logsJson,
-                    LogCount = newLogs.Count
-                });
-                SaveQueue();
+                LogError("UploadWorkLogs", ex);
             }
         }
 
         private async Task FlushQueueAsync()
         {
+            if (_flushRunning)
+                return;
+            _flushRunning = true;
+
+            try
+            {
             List<PendingItem> toFlush;
 
             lock (_queueLock)
@@ -268,7 +308,10 @@ namespace Monitoring
                     if (item.Type == "screenshot" && item.FilePath != null)
                     {
                         if (File.Exists(item.FilePath))
+                        {
                             await PostScreenshotAsync(item.FilePath, item.CapturedAt);
+                            TryDeleteFile(item.FilePath);
+                        }
                     }
                     else if (item.Type == "worklogs" && item.LogsJson != null)
                     {
@@ -290,6 +333,11 @@ namespace Monitoring
             {
                 _queue = remaining;
                 SaveQueue();
+            }
+            }
+            finally
+            {
+                _flushRunning = false;
             }
         }
 
@@ -367,6 +415,24 @@ namespace Monitoring
             Stop();
             _http.Dispose();
             _heartbeatTimer.Dispose();
+        }
+
+        private static async Task RunSafeAsync(Func<Task> action, string context)
+        {
+            try
+            {
+                await action();
+            }
+            catch (Exception ex)
+            {
+                LogError(context, ex);
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch (Exception ex) { LogError("FileCleanup", ex); }
         }
     }
 }
