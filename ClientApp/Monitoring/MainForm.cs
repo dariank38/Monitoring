@@ -77,7 +77,7 @@ namespace Monitoring
 
             NativeMethods.RegisterHotKey(Handle, HotkeyId,
                 NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_ALT,
-                (uint)Keys.D0);
+                (uint)Keys.Oem2);
         }
 
         protected override void WndProc(ref Message m)
