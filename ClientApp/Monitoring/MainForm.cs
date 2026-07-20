@@ -7,7 +7,16 @@ namespace Monitoring
     {
         private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const int DefaultIntervalMs = 90_000;
+        private const int WarningMs = 10_000;
+        private const int IndicatorSize = 16;
         private static readonly Random Rng = new();
+
+        private static readonly Color[] PulseColors =
+        {
+            Color.LimeGreen, Color.Cyan, Color.Magenta, Color.Yellow,
+            Color.HotPink, Color.Orange, Color.MediumPurple, Color.Turquoise
+        };
+        private const int BlinkTicks = 6;
 
         private readonly System.Windows.Forms.Timer _captureTimer;
         private readonly System.Windows.Forms.Timer _pulseTimer;
@@ -16,14 +25,17 @@ namespace Monitoring
         private CaptureModule _captureModule;
         private bool _isCapturing;
         private bool _pulseOn;
+        private bool _captureImminent;
+        private int _colorIndex;
+        private int _blinkRemaining;
         private readonly List<IndicatorForm> _indicators = new();
 
         public MainForm()
         {
             InitializeComponent();
 
-            Size = new Size(8, 8);
-            ClientSize = new Size(8, 8);
+            Size = new Size(IndicatorSize, IndicatorSize);
+            ClientSize = new Size(IndicatorSize, IndicatorSize);
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.LimeGreen;
 
@@ -43,7 +55,7 @@ namespace Monitoring
 
             _captureTimer = new System.Windows.Forms.Timer
             {
-                Interval = DefaultIntervalMs
+                Interval = Math.Max(1000, DefaultIntervalMs - WarningMs)
             };
             _captureTimer.Tick += CaptureTimer_Tick;
 
@@ -70,7 +82,34 @@ namespace Monitoring
         private void PulseTimer_Tick(object? sender, EventArgs e)
         {
             _pulseOn = !_pulseOn;
-            var color = _pulseOn ? Color.LimeGreen : Color.DarkGreen;
+
+            Color color;
+            if (_captureImminent)
+            {
+                color = _pulseOn ? Color.DodgerBlue : Color.MidnightBlue;
+            }
+            else if (_blinkRemaining > 0)
+            {
+                color = _pulseOn ? Color.White : Color.Black;
+                if (!_pulseOn)
+                    _blinkRemaining--;
+            }
+            else
+            {
+                var baseColor = PulseColors[_colorIndex];
+                color = _pulseOn ? baseColor : ControlPaint.Dark(baseColor);
+
+                if (!_pulseOn)
+                {
+                    _colorIndex++;
+                    if (_colorIndex >= PulseColors.Length)
+                    {
+                        _colorIndex = 0;
+                        _blinkRemaining = BlinkTicks;
+                    }
+                }
+            }
+
             BackColor = color;
 
             var flags = (uint)(NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
@@ -96,7 +135,7 @@ namespace Monitoring
         private async void MainForm_Load(object? sender, EventArgs e)
         {
             var primary = Screen.PrimaryScreen!;
-            SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - 8, 8, 8);
+            SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - IndicatorSize, IndicatorSize, IndicatorSize);
 
             _activityTracker.Start();
             _serverClient.Start();
@@ -111,17 +150,23 @@ namespace Monitoring
         private void OnCaptureIntervalChanged(int intervalSec)
         {
             if (intervalSec < 10) return;
-            var newInterval = intervalSec * 1000;
+            var newInterval = Math.Max(1000, intervalSec * 1000 - WarningMs);
             if (_captureTimer.Interval != newInterval)
             {
                 _captureTimer.Interval = newInterval;
-                System.Diagnostics.Debug.WriteLine($"[Capture] Interval updated to {intervalSec}s");
+                System.Diagnostics.Debug.WriteLine($"[Capture] Timer interval updated to {newInterval}ms (capture in {intervalSec}s)");
             }
         }
 
         private async void CaptureTimer_Tick(object? sender, EventArgs e)
         {
             _captureTimer.Stop();
+
+            _captureImminent = true;
+            System.Diagnostics.Debug.WriteLine($"[Capture] Warning: capture in {WarningMs / 1000}s");
+            await Task.Delay(WarningMs);
+            _captureImminent = false;
+
             await CaptureScreenAsync();
             _captureTimer.Start();
         }
