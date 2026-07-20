@@ -28,15 +28,23 @@ namespace Monitoring
             var config = ExclusionConfig.Load(_configPath);
 
             var excludedWindows = GetExcludedWindows(config);
-            var markedWindows = new List<IntPtr>();
+            var affinityWindows = new List<IntPtr>();
+            var hiddenWindows = new List<IntPtr>();
 
             foreach (var window in excludedWindows)
             {
-                if (WindowHelper.ExcludeFromCapture(window.Handle, _hwnd))
-                    markedWindows.Add(window.Handle);
+                if (WindowHelper.ExcludeFromCapture(window.Handle))
+                {
+                    affinityWindows.Add(window.Handle);
+                }
+                else
+                {
+                    WindowHelper.HideWindow(window.Handle);
+                    hiddenWindows.Add(window.Handle);
+                }
             }
 
-            if (markedWindows.Count > 0)
+            if (affinityWindows.Count > 0 || hiddenWindows.Count > 0)
                 await Task.Delay(50);
 
             string? filePath = null;
@@ -47,9 +55,13 @@ namespace Monitoring
             }
             finally
             {
-                foreach (var hWnd in markedWindows)
+                foreach (var hWnd in affinityWindows)
                 {
-                    WindowHelper.RestoreCapture(hWnd, _hwnd);
+                    WindowHelper.RestoreCapture(hWnd);
+                }
+                foreach (var hWnd in hiddenWindows)
+                {
+                    WindowHelper.ShowWindow(hWnd);
                 }
             }
 

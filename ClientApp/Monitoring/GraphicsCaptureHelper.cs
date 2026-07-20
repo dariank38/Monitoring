@@ -19,11 +19,20 @@ namespace Monitoring
             IntPtr CreateForMonitor([In] IntPtr monitor, [In] ref Guid iid);
         }
 
-        [DllImport("combase.dll", PreserveSig = false)]
+        [DllImport("combase.dll", EntryPoint = "RoGetActivationFactory", PreserveSig = false)]
         private static extern IntPtr RoGetActivationFactory(
-            [In][MarshalAs(UnmanagedType.HString)] string activatableClassId,
+            [In] IntPtr activatableClassId,
             [In] ref Guid iid,
             out IntPtr factory);
+
+        [DllImport("combase.dll", EntryPoint = "WindowsCreateString", CallingConvention = CallingConvention.StdCall)]
+        private static extern int WindowsCreateString(
+            [MarshalAs(UnmanagedType.LPWStr)] string sourceString,
+            uint length,
+            out IntPtr hString);
+
+        [DllImport("combase.dll", EntryPoint = "WindowsDeleteString", CallingConvention = CallingConvention.StdCall)]
+        private static extern int WindowsDeleteString(IntPtr hString);
 
         private static readonly Guid IActivationFactoryGuid = new("00000035-0000-0000-C000-000000000046");
 
@@ -43,11 +52,13 @@ namespace Monitoring
 
         public static GraphicsCaptureItem CreateItemForMonitorHandle(IntPtr hmon)
         {
+            var className = "Windows.Graphics.Capture.GraphicsCaptureItem";
+            WindowsCreateString(className, (uint)className.Length, out var hString);
+
             var iid = IActivationFactoryGuid;
-            RoGetActivationFactory(
-                "Windows.Graphics.Capture.GraphicsCaptureItem",
-                ref iid,
-                out var factoryPtr);
+            RoGetActivationFactory(hString, ref iid, out var factoryPtr);
+            WindowsDeleteString(hString);
+
             var interop = (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factoryPtr);
             var captureIid = GraphicsCaptureItemGuid;
             var itemPointer = interop.CreateForMonitor(hmon, ref captureIid);
