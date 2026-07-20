@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using Windows.Graphics.Imaging;
+using WinRT;
 
 namespace Monitoring
 {
@@ -142,14 +144,10 @@ namespace Monitoring
                 using (capturedFrame)
                 {
                     System.Diagnostics.Debug.WriteLine("[Capture] Frame received, converting to bitmap...");
-                    var bitmap = ConvertFrameToBitmap(capturedFrame, size, _d3dDevice);
-                    System.Diagnostics.Debug.WriteLine($"[Capture] Bitmap created: {bitmap.Width}x{bitmap.Height}");
-
                     var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                     var resultPath = Path.Combine(_logFolder, fileName);
 
-                    await Task.Run(() => bitmap.Save(resultPath, ImageFormat.Png));
-                    bitmap.Dispose();
+                    await ConvertFrameToFileAsync(capturedFrame, resultPath);
 
                     System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
                     return resultPath;
@@ -167,59 +165,18 @@ namespace Monitoring
             }
         }
 
-        private static Bitmap ConvertFrameToBitmap(Direct3D11CaptureFrame frame, Windows.Graphics.SizeInt32 size, IDirect3DDevice winrtDevice)
+        private static async Task ConvertFrameToFileAsync(Direct3D11CaptureFrame frame, string filePath)
         {
-            var width = size.Width;
-            var height = size.Height;
-            var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            var softwareBitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface, BitmapAlphaMode.Premultiplied);
 
-            var data = bitmap.LockBits(
-                new Rectangle(0, 0, width, height),
-                ImageLockMode.WriteOnly,
-                PixelFormat.Format32bppArgb);
+            using var fileStream = new System.IO.FileStream(filePath, System.IO.FileMode.Create);
+            var winrtStream = WindowsRuntimeStreamExtensions.AsRandomAccessStream(fileStream);
 
-            var surface = frame.Surface;
-            var d3dSurface = Direct3D11Helper.GetDXGISurface(surface);
+            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, winrtStream);
+            encoder.SetSoftwareBitmap(softwareBitmap);
+            await encoder.FlushAsync();
 
-            using var texture = d3dSurface.QueryInterface<SharpDX.Direct3D11.Texture2D>();
-
-            var d3d11Device = texture.Device;
-
-            var stagingDesc = texture.Description;
-            stagingDesc.Usage = SharpDX.Direct3D11.ResourceUsage.Staging;
-            stagingDesc.BindFlags = SharpDX.Direct3D11.BindFlags.None;
-            stagingDesc.CpuAccessFlags = SharpDX.Direct3D11.CpuAccessFlags.Read;
-            stagingDesc.OptionFlags = SharpDX.Direct3D11.ResourceOptionFlags.None;
-
-            using var stagingTexture = new SharpDX.Direct3D11.Texture2D(d3d11Device, stagingDesc);
-            d3d11Device.ImmediateContext.CopyResource(texture, stagingTexture);
-
-            var mapped = d3d11Device.ImmediateContext.MapSubresource(
-                stagingTexture, 0,
-                SharpDX.Direct3D11.MapMode.Read,
-                SharpDX.Direct3D11.MapFlags.None);
-
-            var sourcePtr = mapped.DataPointer;
-            var destPtr = data.Scan0;
-
-            for (int y = 0; y < height; y++)
-            {
-                unsafe
-                {
-                    Buffer.MemoryCopy(
-                        (void*)(sourcePtr + y * mapped.RowPitch),
-                        (void*)(destPtr + y * data.Stride),
-                        data.Stride,
-                        width * 4);
-                }
-            }
-
-            d3d11Device.ImmediateContext.UnmapSubresource(stagingTexture, 0);
-            bitmap.UnlockBits(data);
-
-            d3dSurface.Dispose();
-
-            return bitmap;
+            softwareBitmap.Dispose();
         }
 
         private static List<WindowInfo> GetExcludedWindows(ExclusionConfig config)
