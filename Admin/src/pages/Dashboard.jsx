@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Monitor, Circle, Activity, Camera, Clock } from 'lucide-react'
-import { fetchMachines } from '../lib/api'
+import { Monitor, Circle, Camera, Clock } from 'lucide-react'
+import { fetchMachines, thumbnailUrl } from '../lib/api'
 import { formatDuration, formatDateTime, isOnline, cn } from '../lib/utils'
 
 export default function Dashboard() {
@@ -36,54 +36,62 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-6">
         {loading ? (
           <div className="text-center py-12 text-slate-400">Loading...</div>
         ) : machines.length === 0 ? (
           <div className="text-center py-12 text-slate-400">No machines registered yet</div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {machines.map((m) => {
               const online = isOnline(m.last_seen)
               return (
                 <Link
                   key={m.hardware_id}
                   to={`/machine/${m.hardware_id}`}
-                  className="bg-white rounded-lg border p-5 hover:shadow-md transition-shadow flex items-center gap-4"
+                  className="bg-white rounded-lg border overflow-hidden hover:shadow-md transition-shadow group"
                 >
-                  <div className={cn(
-                    'w-3 h-3 rounded-full flex-shrink-0',
-                    online ? 'bg-green-500' : 'bg-slate-300'
-                  )} />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-900 truncate">
-                        {m.computer_name}
-                      </span>
+                  <div className="relative aspect-video bg-slate-900 overflow-hidden">
+                    {m.latest_screenshot_id ? (
+                      <img
+                        src={thumbnailUrl(m.latest_screenshot_id)}
+                        alt={m.computer_name}
+                        className="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Camera className="w-8 h-8 text-slate-600" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
                       <span className={cn(
-                        'text-xs px-2 py-0.5 rounded-full',
-                        online ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                        'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full',
+                        online ? 'bg-green-500/90 text-white' : 'bg-slate-500/90 text-white'
                       )}>
+                        <Circle className="w-2 h-2 fill-current" />
                         {online ? 'Online' : 'Offline'}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-400 mt-1 font-mono truncate">
-                      {m.hardware_id.substring(0, 16)}...
-                    </div>
                   </div>
 
-                  <div className="flex items-center gap-6 text-sm">
-                    <div className="flex items-center gap-1.5 text-slate-600">
-                      <Camera className="w-4 h-4 text-slate-400" />
-                      <span>{m.screenshot_count || 0}</span>
+                  <div className="p-3">
+                    <div className="font-medium text-slate-900 truncate">
+                      {m.computer_name}
                     </div>
-                    <div className="flex items-center gap-1.5 text-slate-600">
-                      <Clock className="w-4 h-4 text-slate-400" />
-                      <span>{formatDuration(m.total_active_sec)}</span>
-                    </div>
-                    <div className="text-xs text-slate-400 w-32 text-right">
-                      {formatDateTime(m.last_seen)}
+                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-1">
+                        <Camera className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{m.screenshot_count || 0}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{formatDuration(m.total_active_sec)}</span>
+                      </div>
+                      <span className="ml-auto text-slate-400">
+                        {formatDateTime(m.last_seen)}
+                      </span>
                     </div>
                   </div>
                 </Link>

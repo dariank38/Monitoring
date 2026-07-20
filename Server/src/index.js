@@ -159,7 +159,8 @@ app.get('/api/machines', (req, res) => {
   const machines = db.prepare(`
     SELECT m.*,
       (SELECT COUNT(*) FROM screenshots WHERE hardware_id = m.hardware_id) as screenshot_count,
-      (SELECT SUM(duration_sec) FROM work_logs WHERE hardware_id = m.hardware_id AND status = 'Active') as total_active_sec
+      (SELECT SUM(duration_sec) FROM work_logs WHERE hardware_id = m.hardware_id AND status = 'Active') as total_active_sec,
+      (SELECT id FROM screenshots WHERE hardware_id = m.hardware_id ORDER BY id DESC LIMIT 1) as latest_screenshot_id
     FROM machines m
     ORDER BY m.last_seen DESC
   `).all();
