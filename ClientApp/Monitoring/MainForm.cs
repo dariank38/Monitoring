@@ -30,7 +30,6 @@ namespace Monitoring
 
             _activityTracker = new ActivityTracker();
             _serverClient = new ServerClient();
-            _captureModule = new CaptureModule(LogFolder);
 
             foreach (var screen in Screen.AllScreens)
             {
@@ -100,6 +99,8 @@ namespace Monitoring
 
             _activityTracker.Start();
             _serverClient.Start();
+
+            _captureModule = new CaptureModule(LogFolder, Handle);
 
             await Task.Delay(100);
             await CaptureScreenAsync();

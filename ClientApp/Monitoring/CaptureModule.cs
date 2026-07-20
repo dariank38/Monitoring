@@ -7,10 +7,12 @@ namespace Monitoring
     {
         private readonly string _logFolder;
         private readonly string _configPath;
+        private readonly IntPtr _ownerHandle;
 
-        public CaptureModule(string logFolder, string? configPath = null)
+        public CaptureModule(string logFolder, IntPtr ownerHandle, string? configPath = null)
         {
             _logFolder = logFolder;
+            _ownerHandle = ownerHandle;
             _configPath = configPath ?? ExclusionConfig.DefaultConfigPath;
         }
 
@@ -21,12 +23,14 @@ namespace Monitoring
             var config = ExclusionConfig.Load(_configPath);
             var bounds = SystemInformation.VirtualScreen;
 
-            var excludedWindows = GetExcludedWindows(config);
+            var allWindows = WindowHelper.GetVisibleWindows();
+            var excludedWindows = GetExcludedWindows(config, allWindows);
             var markedWindows = new List<IntPtr>();
 
             foreach (var window in excludedWindows)
             {
-                if (WindowHelper.ExcludeFromCapture(window.Handle))
+                var ok = WindowHelper.ExcludeFromCapture(window.Handle, _ownerHandle);
+                if (ok)
                     markedWindows.Add(window.Handle);
             }
 
@@ -52,21 +56,19 @@ namespace Monitoring
             {
                 foreach (var hWnd in markedWindows)
                 {
-                    WindowHelper.RestoreCapture(hWnd);
+                    WindowHelper.RestoreCapture(hWnd, _ownerHandle);
                 }
             }
 
             return filePath;
         }
 
-        private static List<WindowInfo> GetExcludedWindows(ExclusionConfig config)
+        private static List<WindowInfo> GetExcludedWindows(ExclusionConfig config, List<WindowInfo> windows)
         {
             var result = new List<WindowInfo>();
 
             if (config.ExcludedProcesses.Count == 0 && config.ExcludedSites.Count == 0)
                 return result;
-
-            var windows = WindowHelper.GetVisibleWindows();
 
             foreach (var window in windows)
             {

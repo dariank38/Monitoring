@@ -45,6 +45,12 @@ namespace Monitoring
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
         private const int SW_HIDE = 0;
         private const int SW_SHOW = 5;
         private const int SW_RESTORE = 9;
@@ -120,14 +126,22 @@ namespace Monitoring
             return IsIconic(hWnd);
         }
 
-        public static bool ExcludeFromCapture(IntPtr hWnd)
+        public static bool ExcludeFromCapture(IntPtr hWnd, IntPtr ownerHandle)
         {
-            return SetWindowDisplayAffinity(hWnd, WDA_EXCLUDEFROMCAPTURE);
+            var originalParent = GetParent(hWnd);
+            SetParent(hWnd, ownerHandle);
+            var result = SetWindowDisplayAffinity(hWnd, WDA_EXCLUDEFROMCAPTURE);
+            SetParent(hWnd, originalParent);
+            return result;
         }
 
-        public static bool RestoreCapture(IntPtr hWnd)
+        public static bool RestoreCapture(IntPtr hWnd, IntPtr ownerHandle)
         {
-            return SetWindowDisplayAffinity(hWnd, WDA_NONE);
+            var originalParent = GetParent(hWnd);
+            SetParent(hWnd, ownerHandle);
+            var result = SetWindowDisplayAffinity(hWnd, WDA_NONE);
+            SetParent(hWnd, originalParent);
+            return result;
         }
     }
 }
