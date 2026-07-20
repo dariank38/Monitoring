@@ -27,7 +27,8 @@ namespace Monitoring
         private bool _captureImminent;
         private bool _warningEnabled = true;
         private const int HotkeyId = 9001;
-        private Color _toggleFlashColor = Color.Empty;
+        private Color _toggleFlashColorA = Color.Empty;
+        private Color _toggleFlashColorB = Color.Empty;
         private int _toggleFlashRemaining;
         private int _colorIndex;
         private readonly List<IndicatorForm> _indicators = new();
@@ -84,10 +85,23 @@ namespace Monitoring
                 _warningEnabled = !_warningEnabled;
                 System.Diagnostics.Debug.WriteLine($"[Hotkey] Pre-capture warning {(_warningEnabled ? "enabled" : "disabled")}");
 
-                _toggleFlashColor = _warningEnabled ? Color.LimeGreen : Color.Red;
-                _toggleFlashRemaining = 8;
                 _captureImminent = false;
                 _colorIndex = 0;
+
+                if (_warningEnabled)
+                {
+                    _toggleFlashColorA = Color.LimeGreen;
+                    _toggleFlashColorB = Color.Black;
+                    _toggleFlashRemaining = 8;
+                    _pulseTimer.Interval = 200;
+                }
+                else
+                {
+                    _toggleFlashColorA = Color.Red;
+                    _toggleFlashColorB = Color.Green;
+                    _toggleFlashRemaining = 10;
+                    _pulseTimer.Interval = 100;
+                }
             }
             base.WndProc(ref m);
         }
@@ -107,9 +121,11 @@ namespace Monitoring
             if (_toggleFlashRemaining > 0)
             {
                 _pulseOn = !_pulseOn;
-                color = _pulseOn ? _toggleFlashColor : Color.Black;
+                color = _pulseOn ? _toggleFlashColorA : _toggleFlashColorB;
                 if (!_pulseOn)
                     _toggleFlashRemaining--;
+                if (_toggleFlashRemaining == 0)
+                    _pulseTimer.Interval = PulseIntervalMs;
             }
             else if (_captureImminent)
             {
