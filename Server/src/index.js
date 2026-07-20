@@ -36,16 +36,17 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-function upsertMachine(hardwareId, computerName) {
+function upsertMachine(hardwareId, computerName, timezone) {
   const stmt = db.prepare(`
-    INSERT INTO machines (hardware_id, computer_name, last_seen, is_online)
-    VALUES (?, ?, datetime('now'), 1)
+    INSERT INTO machines (hardware_id, computer_name, timezone, last_seen, is_online)
+    VALUES (?, ?, ?, datetime('now'), 1)
     ON CONFLICT(hardware_id) DO UPDATE SET
       computer_name = excluded.computer_name,
+      timezone = excluded.timezone,
       last_seen = datetime('now'),
       is_online = 1
   `);
-  stmt.run(hardwareId, computerName);
+  stmt.run(hardwareId, computerName, timezone || '');
 }
 
 function markOfflineMachines() {
@@ -76,11 +77,11 @@ setInterval(cleanupOldScreenshots, 3600000);
 // --- Client API ---
 
 app.post('/api/heartbeat', (req, res) => {
-  const { hardware_id, computer_name } = req.body;
+  const { hardware_id, computer_name, timezone } = req.body;
   if (!hardware_id) return res.status(400).json({ error: 'hardware_id required' });
 
-  upsertMachine(hardware_id, computer_name || 'unknown');
-  console.log(`[heartbeat] ${computer_name} (${hardware_id.substring(0, 12)}...)`);
+  upsertMachine(hardware_id, computer_name || 'unknown', timezone || '');
+  console.log(`[heartbeat] ${computer_name} (${hardware_id.substring(0, 12)}...) tz=${timezone || 'n/a'}`);
   res.json({ ok: true });
 });
 
@@ -89,7 +90,7 @@ app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
   const computerName = req.headers['x-computer-name'] || 'unknown';
   if (!hardwareId) return res.status(400).json({ error: 'x-hardware-id header required' });
 
-  upsertMachine(hardwareId, computerName);
+  upsertMachine(hardwareId, computerName, req.headers['x-timezone'] || '');
 
   if (!req.file) return res.status(400).json({ error: 'screenshot file required' });
 
@@ -121,7 +122,7 @@ app.post('/api/worklogs', (req, res) => {
   const computerName = req.headers['x-computer-name'] || 'unknown';
   if (!hardwareId) return res.status(400).json({ error: 'x-hardware-id header required' });
 
-  upsertMachine(hardwareId, computerName);
+  upsertMachine(hardwareId, computerName, req.headers['x-timezone'] || '');
 
   const { logs } = req.body;
   if (!Array.isArray(logs)) return res.status(400).json({ error: 'logs array required' });

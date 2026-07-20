@@ -6,6 +6,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS machines (
     hardware_id TEXT PRIMARY KEY,
     computer_name TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT '',
     first_seen TEXT NOT NULL DEFAULT (datetime('now')),
     last_seen TEXT NOT NULL DEFAULT (datetime('now')),
     is_online INTEGER NOT NULL DEFAULT 0
@@ -40,5 +41,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_worklogs_date ON work_logs(log_date);
   CREATE INDEX IF NOT EXISTS idx_worklogs_hw_date ON work_logs(hardware_id, log_date);
 `);
+
+// Migration: add timezone column if missing (for existing databases)
+try {
+  db.exec(`ALTER TABLE machines ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`);
+} catch (e) {
+  // Column already exists
+}
 
 export default db;

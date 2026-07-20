@@ -17,17 +17,39 @@ export function formatDuration(seconds) {
   return parts.join(' ')
 }
 
-export function formatDateTime(iso) {
-  if (!iso) return '--'
+function parseISO(iso) {
+  if (!iso) return null
   let s = iso.includes('T') ? iso : iso.replace(' ', 'T')
   if (!s.endsWith('Z') && !s.includes('+') && !s.includes('-', 10)) s += 'Z'
-  return new Date(s).toLocaleString()
+  return new Date(s)
+}
+
+export function formatDateTime(iso) {
+  const d = parseISO(iso)
+  if (!d) return '--'
+  return d.toLocaleString()
+}
+
+const LAOS_TZ = 'Asia/Vientiane'
+
+export function formatDateTimeLaos(iso) {
+  const d = parseISO(iso)
+  if (!d) return '--'
+  return d.toLocaleString('en-GB', { timeZone: LAOS_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+export function formatDateTimeClientTZ(iso, timezone) {
+  const d = parseISO(iso)
+  if (!d) return '--'
+  try {
+    return d.toLocaleString('en-GB', { timeZone: timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch {
+    return d.toLocaleString()
+  }
 }
 
 export function isOnline(lastSeen) {
   if (!lastSeen) return false
-  let iso = lastSeen.includes('T') ? lastSeen : lastSeen.replace(' ', 'T')
-  if (!iso.endsWith('Z') && !iso.includes('+') && !iso.includes('-', 10)) iso += 'Z'
-  const d = new Date(iso)
+  const d = parseISO(lastSeen)
   return (Date.now() - d.getTime()) < 60000
 }
