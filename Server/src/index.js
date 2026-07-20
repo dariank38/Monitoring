@@ -18,6 +18,20 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(thumbsDir)) fs.mkdirSync(thumbsDir, { recursive: true });
 
 const RETENTION_DAYS = 7;
+const LAOS_OFFSET_HOURS = 7;
+
+// Convert UTC ISO string to Laos time (UTC+7) in 'YYYY-MM-DD HH:MM:SS' format
+function toLaosTime(utcIso) {
+  const d = new Date(utcIso);
+  if (isNaN(d)) return new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const laos = new Date(d.getTime() + LAOS_OFFSET_HOURS * 3600000);
+  return laos.toISOString().replace('T', ' ').substring(0, 19);
+}
+
+// Get current Laos time for SQLite datetime()
+function laosNowSqlite() {
+  return `datetime('now', '+${LAOS_OFFSET_HOURS} hours')`;
+}
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -39,11 +53,11 @@ const upload = multer({ storage });
 function upsertMachine(hardwareId, computerName, timezone) {
   const stmt = db.prepare(`
     INSERT INTO machines (hardware_id, computer_name, timezone, last_seen, is_online)
-    VALUES (?, ?, ?, datetime('now'), 1)
+    VALUES (?, ?, ?, ${laosNowSqlite()}, 1)
     ON CONFLICT(hardware_id) DO UPDATE SET
       computer_name = excluded.computer_name,
       timezone = excluded.timezone,
-      last_seen = datetime('now'),
+      last_seen = ${laosNowSqlite()},
       is_online = 1
   `);
   stmt.run(hardwareId, computerName, timezone || '');
@@ -52,14 +66,15 @@ function upsertMachine(hardwareId, computerName, timezone) {
 function markOfflineMachines() {
   db.prepare(`
     UPDATE machines SET is_online = 0
-    WHERE last_seen < datetime('now', '-60 seconds')
+    WHERE last_seen < datetime('now', '+${LAOS_OFFSET_HOURS} hours', '-60 seconds')
   `).run();
 }
 
 setInterval(markOfflineMachines, 10000);
 
 function cleanupOldScreenshots() {
-  const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
+  const cutoffUtc = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
+  const cutoff = toLaosTime(cutoffUtc);
   const old = db.prepare('SELECT id, hardware_id, filename FROM screenshots WHERE captured_at < ?').all(cutoff);
   for (const s of old) {
     const filePath = path.join(uploadsDir, s.hardware_id, s.filename);
@@ -94,7 +109,7 @@ app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
 
   if (!req.file) return res.status(400).json({ error: 'screenshot file required' });
 
-  const capturedAt = req.body.captured_at || new Date().toISOString();
+  const capturedAt = toLaosTime(req.body.captured_at || new Date().toISOString());
   const origPath = path.join(uploadsDir, hardwareId, req.file.originalname);
 
   const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');

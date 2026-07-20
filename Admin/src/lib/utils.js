@@ -17,32 +17,36 @@ export function formatDuration(seconds) {
   return parts.join(' ')
 }
 
-function parseISO(iso) {
+// Times stored in DB are Laos time (UTC+7), no timezone indicator.
+// Parse them with +07:00 offset so toLocaleString with timeZone works correctly.
+function parseLaosTime(iso) {
   if (!iso) return null
   let s = iso.includes('T') ? iso : iso.replace(' ', 'T')
-  if (!s.endsWith('Z') && !s.includes('+') && !s.includes('-', 10)) s += 'Z'
-  return new Date(s)
+  // Remove any trailing Z or timezone offset — stored times are Laos time
+  s = s.replace(/[Zz].*$/, '').replace(/[+-]\d{2}:?\d{2}$/, '')
+  // Tag as UTC+7 (Laos timezone)
+  return new Date(s + '+07:00')
 }
 
 export function formatDateTime(iso) {
-  const d = parseISO(iso)
+  const d = parseLaosTime(iso)
   if (!d) return '--'
-  return d.toLocaleString()
+  return d.toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 const LAOS_TZ = 'Asia/Vientiane'
 
 export function formatDateTimeLaos(iso) {
-  const d = parseISO(iso)
+  const d = parseLaosTime(iso)
   if (!d) return '--'
   return d.toLocaleString('en-GB', { timeZone: LAOS_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 export function formatDateTimeClientTZ(iso, timezone) {
-  const d = parseISO(iso)
+  const d = parseLaosTime(iso)
   if (!d) return '--'
   try {
-    return d.toLocaleString('en-GB', { timeZone: timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return d.toLocaleString('en-GB', { timeZone: timezone || LAOS_TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
   } catch {
     return d.toLocaleString()
   }
@@ -50,6 +54,7 @@ export function formatDateTimeClientTZ(iso, timezone) {
 
 export function isOnline(lastSeen) {
   if (!lastSeen) return false
-  const d = parseISO(lastSeen)
+  const d = parseLaosTime(lastSeen)
+  if (!d) return false
   return (Date.now() - d.getTime()) < 60000
 }

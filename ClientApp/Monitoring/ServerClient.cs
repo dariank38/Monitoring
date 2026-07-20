@@ -226,7 +226,7 @@ namespace Monitoring
             fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
 
             form.Add(fileContent, "screenshot", Path.GetFileName(filePath));
-            form.Add(new StringContent(capturedAt.ToString("yyyy-MM-ddTHH:mm:ss")), "captured_at");
+            form.Add(new StringContent(capturedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")), "captured_at");
 
             var resp = await _http.PostAsync($"{ServerUrl}/api/screenshots", form);
             resp.EnsureSuccessStatusCode();
