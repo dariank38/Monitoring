@@ -11,7 +11,7 @@ namespace Monitoring
             "chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe"
         };
 
-        public const string DefaultConfigPath = @"D:\ScreenLogs\exclusions.json";
+        public const string DefaultConfigPath = Path.Combine(AppContext.BaseDirectory, "Logs", "exclusions.json");
 
         public static ExclusionConfig Load(string? path = null)
         {
