@@ -87,7 +87,7 @@ namespace Monitoring
             Color color;
             if (_captureImminent)
             {
-                color = _pulseOn ? Color.DodgerBlue : Color.MidnightBlue;
+                color = _pulseOn ? Color.DodgerBlue : Color.Black;
             }
             else if (_blinkRemaining > 0)
             {
@@ -164,9 +164,11 @@ namespace Monitoring
             _captureTimer.Stop();
 
             _captureImminent = true;
+            _pulseTimer.Interval = 200;
             System.Diagnostics.Debug.WriteLine($"[Capture] Warning: capture in {WarningMs / 1000}s");
             await Task.Delay(WarningMs);
             _captureImminent = false;
+            _pulseTimer.Interval = 1000;
 
             await CaptureScreenAsync();
             _captureTimer.Start();
