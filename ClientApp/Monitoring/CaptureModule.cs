@@ -35,22 +35,29 @@ namespace Monitoring
 
             foreach (var window in excludedWindows)
             {
-                if (window.IsSiteExclusion)
+                try
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Capture] Site exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
-                    WindowHelper.HideWindow(window.Handle);
-                    hiddenWindows.Add(window.Handle);
+                    if (window.IsSiteExclusion)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Capture] Site exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
+                        WindowHelper.HideWindow(window.Handle);
+                        hiddenWindows.Add(window.Handle);
+                    }
+                    else if (WindowHelper.ExcludeFromCapture(window.Handle))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: affinity {window.ProcessName} - \"{window.Title}\"");
+                        affinityWindows.Add(window.Handle);
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
+                        WindowHelper.HideWindow(window.Handle);
+                        hiddenWindows.Add(window.Handle);
+                    }
                 }
-                else if (WindowHelper.ExcludeFromCapture(window.Handle))
+                catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: affinity {window.ProcessName} - \"{window.Title}\"");
-                    affinityWindows.Add(window.Handle);
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
-                    WindowHelper.HideWindow(window.Handle);
-                    hiddenWindows.Add(window.Handle);
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Failed to exclude {window.ProcessName} - \"{window.Title}\": {ex.Message}");
                 }
             }
 
@@ -67,11 +74,13 @@ namespace Monitoring
             {
                 foreach (var hWnd in affinityWindows)
                 {
-                    WindowHelper.RestoreCapture(hWnd);
+                    try { WindowHelper.RestoreCapture(hWnd); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Capture] Failed to restore affinity: {ex.Message}"); }
                 }
                 foreach (var hWnd in hiddenWindows)
                 {
-                    WindowHelper.ShowWindow(hWnd);
+                    try { WindowHelper.ShowWindow(hWnd); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Capture] Failed to restore window: {ex.Message}"); }
                 }
             }
 
