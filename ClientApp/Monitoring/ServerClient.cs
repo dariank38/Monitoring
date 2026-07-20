@@ -188,7 +188,6 @@ namespace Monitoring
                 try
                 {
                     await PostScreenshotAsync(filePath, capturedAt);
-                    TryDeleteFile(filePath);
                     return;
                 }
                 catch (Exception ex)
@@ -312,7 +311,6 @@ namespace Monitoring
                         if (File.Exists(item.FilePath))
                         {
                             await PostScreenshotAsync(item.FilePath, item.CapturedAt);
-                            TryDeleteFile(item.FilePath);
                         }
                         else
                         {
