@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using WinRT;
 
 namespace Monitoring
 {
@@ -19,10 +20,10 @@ namespace Monitoring
             IntPtr CreateForMonitor([In] IntPtr monitor, [In] ref Guid iid);
         }
 
-        [DllImport("combase.dll", EntryPoint = "RoGetActivationFactory", PreserveSig = false)]
-        private static extern IntPtr RoGetActivationFactory(
-            [In] IntPtr activatableClassId,
-            [In] ref Guid iid,
+        [DllImport("combase.dll", EntryPoint = "RoGetActivationFactory", CallingConvention = CallingConvention.StdCall)]
+        private static extern int RoGetActivationFactory(
+            IntPtr activatableClassId,
+            ref Guid iid,
             out IntPtr factory);
 
         [DllImport("combase.dll", EntryPoint = "WindowsCreateString", CallingConvention = CallingConvention.StdCall)]
@@ -47,6 +48,7 @@ namespace Monitoring
         public static GraphicsCaptureItem CreateItemForMonitor(IntPtr hwnd)
         {
             var hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+            System.Diagnostics.Debug.WriteLine($"[Capture] hmon=0x{hmon.ToInt64():X}, hwnd=0x{hwnd.ToInt64():X}");
             return CreateItemForMonitorHandle(hmon);
         }
 
@@ -56,16 +58,42 @@ namespace Monitoring
             WindowsCreateString(className, (uint)className.Length, out var hString);
 
             var iid = IActivationFactoryGuid;
-            RoGetActivationFactory(hString, ref iid, out var factoryPtr);
+            var hr = RoGetActivationFactory(hString, ref iid, out var factoryPtr);
             WindowsDeleteString(hString);
 
-            var interop = (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factoryPtr);
-            var captureIid = GraphicsCaptureItemGuid;
-            var itemPointer = interop.CreateForMonitor(hmon, ref captureIid);
-            var item = Marshal.GetObjectForIUnknown(itemPointer) as GraphicsCaptureItem;
-            Marshal.Release(itemPointer);
-            Marshal.Release(factoryPtr);
-            return item!;
+            if (hr != 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Capture] RoGetActivationFactory failed: 0x{hr:X8}");
+                return null!;
+            }
+
+            try
+            {
+                var interop = (IGraphicsCaptureItemInterop)Marshal.GetObjectForIUnknown(factoryPtr);
+                var captureIid = GraphicsCaptureItemGuid;
+                var itemPointer = interop.CreateForMonitor(hmon, ref captureIid);
+
+                if (itemPointer == IntPtr.Zero)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Capture] CreateForMonitor returned null pointer");
+                    return null!;
+                }
+
+                try
+                {
+                    var item = MarshalInspectable<GraphicsCaptureItem>.FromAbi(itemPointer);
+                    System.Diagnostics.Debug.WriteLine($"[Capture] GraphicsCaptureItem created, size={item.Size.Width}x{item.Size.Height}");
+                    return item;
+                }
+                finally
+                {
+                    Marshal.Release(itemPointer);
+                }
+            }
+            finally
+            {
+                Marshal.Release(factoryPtr);
+            }
         }
 
         public static IDirect3DDevice CreateD3DDevice()
@@ -79,7 +107,7 @@ namespace Monitoring
             CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.NativePointer, out var pUnknown);
             try
             {
-                return Marshal.GetObjectForIUnknown(pUnknown) as IDirect3DDevice;
+                return MarshalInspectable<IDirect3DDevice>.FromAbi(pUnknown);
             }
             finally
             {
