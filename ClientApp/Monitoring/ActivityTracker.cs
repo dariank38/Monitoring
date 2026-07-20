@@ -5,7 +5,7 @@ namespace Monitoring
 {
     public sealed class ActivityTracker : IDisposable
     {
-        private const string LogFolder = @"D:\ScreenLogs";
+        private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const string ActivityLogFile = "ActivityLog.csv";
         private const int IdleThresholdSec = 300; // 5 minutes of no activity = idle
         private const int SaveIntervalSec = 60; // save work time every 60 seconds

@@ -5,7 +5,7 @@ namespace Monitoring
 {
     public partial class MainForm : Form
     {
-        private const string LogFolder = @"D:\ScreenLogs";
+        private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const int DefaultIntervalMs = 90_000;
         private static readonly Random Rng = new();
 

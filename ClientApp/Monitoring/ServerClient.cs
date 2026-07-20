@@ -8,11 +8,12 @@ namespace Monitoring
 {
     public sealed class ServerClient : IDisposable
     {
-        private const string ConfigFile = @"D:\ScreenLogs\config.json";
+        private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
+        private const string ConfigFile = "config.json";
         private const string DefaultServerUrl = "http://localhost:3000";
         private const int HeartbeatIntervalSec = 30;
-        private const string QueueFile = @"D:\ScreenLogs\sync_queue.json";
-        private const string SentLogMarker = @"D:\ScreenLogs\last_sent_log.txt";
+        private const string QueueFile = "sync_queue.json";
+        private const string SentLogMarker = "last_sent_log.txt";
 
         private readonly HttpClient _http;
         private readonly string _hardwareId;
@@ -64,9 +65,11 @@ namespace Monitoring
         {
             try
             {
-                if (File.Exists(ConfigFile))
+                Directory.CreateDirectory(LogFolder);
+                var configPath = Path.Combine(LogFolder, ConfigFile);
+                if (File.Exists(configPath))
                 {
-                    var json = File.ReadAllText(ConfigFile);
+                    var json = File.ReadAllText(configPath);
                     using var doc = JsonDocument.Parse(json);
                     if (doc.RootElement.TryGetProperty("server_url", out var urlEl) &&
                         urlEl.ValueKind == JsonValueKind.String)
@@ -288,8 +291,9 @@ namespace Monitoring
         {
             try
             {
-                if (File.Exists(SentLogMarker))
-                    return int.Parse(File.ReadAllText(SentLogMarker).Trim());
+                var markerPath = Path.Combine(LogFolder, SentLogMarker);
+                if (File.Exists(markerPath))
+                    return int.Parse(File.ReadAllText(markerPath).Trim());
             }
             catch { }
             return 0;
@@ -299,8 +303,8 @@ namespace Monitoring
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(SentLogMarker)!);
-                File.WriteAllText(SentLogMarker, line.ToString());
+                Directory.CreateDirectory(LogFolder);
+                File.WriteAllText(Path.Combine(LogFolder, SentLogMarker), line.ToString());
             }
             catch { }
         }
@@ -309,9 +313,10 @@ namespace Monitoring
         {
             try
             {
-                if (File.Exists(QueueFile))
+                var queuePath = Path.Combine(LogFolder, QueueFile);
+                if (File.Exists(queuePath))
                 {
-                    var json = File.ReadAllText(QueueFile);
+                    var json = File.ReadAllText(queuePath);
                     _queue = JsonSerializer.Deserialize<List<PendingItem>>(json) ?? new();
                 }
             }
@@ -322,9 +327,9 @@ namespace Monitoring
         {
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(QueueFile)!);
+                Directory.CreateDirectory(LogFolder);
                 var json = JsonSerializer.Serialize(_queue);
-                File.WriteAllText(QueueFile, json);
+                File.WriteAllText(Path.Combine(LogFolder, QueueFile), json);
             }
             catch { }
         }
