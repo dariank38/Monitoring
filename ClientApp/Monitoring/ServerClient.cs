@@ -23,8 +23,33 @@ namespace Monitoring
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private bool _serverOnline;
         private readonly object _queueLock = new();
+        private static readonly string ErrorLogFile = Path.Combine(LogFolder, "error.log");
 
         public event Action<int>? CaptureIntervalChanged;
+
+        private static void LogError(string context, Exception ex)
+        {
+            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n";
+            System.Diagnostics.Debug.WriteLine(msg);
+            try
+            {
+                Directory.CreateDirectory(LogFolder);
+                File.AppendAllText(ErrorLogFile, msg + "\n");
+            }
+            catch { }
+        }
+
+        private static void LogError(string context, string message)
+        {
+            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {message}";
+            System.Diagnostics.Debug.WriteLine(msg);
+            try
+            {
+                Directory.CreateDirectory(LogFolder);
+                File.AppendAllText(ErrorLogFile, msg + "\n");
+            }
+            catch { }
+        }
 
         private List<PendingItem> _queue = new();
 
@@ -132,7 +157,7 @@ namespace Monitoring
             catch (Exception ex)
             {
                 _serverOnline = false;
-                System.Diagnostics.Debug.WriteLine($"[Heartbeat] Failed: {ex.Message}");
+                LogError("Heartbeat", ex);
             }
 
             if (_serverOnline && (!wasOnline || _queue.Count > 0))
@@ -150,8 +175,9 @@ namespace Monitoring
                     await PostScreenshotAsync(filePath, capturedAt);
                     return;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    LogError("UploadScreenshot", ex);
                 }
             }
 
@@ -197,8 +223,9 @@ namespace Monitoring
                     SetLastSentLogLine(lastSentLine + newLogs.Count);
                     return;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    LogError("UploadWorkLogs", ex);
                 }
             }
 
@@ -250,10 +277,11 @@ namespace Monitoring
                         SetLastSentLogLine(currentLine + item.LogCount);
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
                     _serverOnline = false;
                     failed = true;
+                    LogError("FlushQueue", ex);
                     remaining.Add(item);
                 }
             }
