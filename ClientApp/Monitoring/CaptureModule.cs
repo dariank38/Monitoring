@@ -74,9 +74,13 @@ namespace Monitoring
 
             var item = GraphicsCaptureHelper.CreateItemForMonitor(_hwnd);
             if (item == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[Capture] Failed to create GraphicsCaptureItem");
                 return null;
+            }
 
             var size = item.Size;
+            System.Diagnostics.Debug.WriteLine($"[Capture] Item size: {size.Width}x{size.Height}");
 
             using var framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                 _d3dDevice,
@@ -90,31 +94,49 @@ namespace Monitoring
 
             void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
             {
-                using var frame = sender.TryGetNextFrame();
-                tcs.TrySetResult(frame);
+                try
+                {
+                    var frame = sender.TryGetNextFrame();
+                    tcs.TrySetResult(frame);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Capture] FrameArrived error: {ex.Message}");
+                    tcs.TrySetResult(null);
+                }
             }
 
             framePool.FrameArrived += OnFrameArrived;
             session.StartCapture();
 
             var captureTask = tcs.Task;
-            var timeoutTask = Task.Delay(3000);
+            var timeoutTask = Task.Delay(5000);
             var completed = await Task.WhenAny(captureTask, timeoutTask);
 
             framePool.FrameArrived -= OnFrameArrived;
+
+            if (completed != captureTask)
+            {
+                System.Diagnostics.Debug.WriteLine("[Capture] Timed out waiting for frame");
+                session.Dispose();
+                framePool.Dispose();
+                return null;
+            }
+
+            var capturedFrame = await captureTask;
             session.Dispose();
             framePool.Dispose();
 
-            if (completed != captureTask)
-                return null;
-
-            var capturedFrame = await captureTask;
             if (capturedFrame == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[Capture] No frame received");
                 return null;
+            }
 
             using (capturedFrame)
             {
-                var bitmap = ConvertFrameToBitmap(capturedFrame, size);
+                var bitmap = ConvertFrameToBitmap(capturedFrame, size, _d3dDevice!);
+                System.Diagnostics.Debug.WriteLine($"[Capture] Bitmap created: {bitmap.Width}x{bitmap.Height}");
 
                 var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
                 var resultPath = Path.Combine(_logFolder, fileName);
@@ -122,11 +144,12 @@ namespace Monitoring
                 await Task.Run(() => bitmap.Save(resultPath, ImageFormat.Png));
                 bitmap.Dispose();
 
+                System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
                 return resultPath;
             }
         }
 
-        private static Bitmap ConvertFrameToBitmap(Direct3D11CaptureFrame frame, Windows.Graphics.SizeInt32 size)
+        private static Bitmap ConvertFrameToBitmap(Direct3D11CaptureFrame frame, Windows.Graphics.SizeInt32 size, IDirect3DDevice winrtDevice)
         {
             var width = size.Width;
             var height = size.Height;
@@ -140,10 +163,9 @@ namespace Monitoring
             var surface = frame.Surface;
             var d3dSurface = Direct3D11Helper.GetDXGISurface(surface);
 
-            using var d3d11Device = new SharpDX.Direct3D11.Device(
-                SharpDX.Direct3D.DriverType.Hardware,
-                SharpDX.Direct3D11.DeviceCreationFlags.BgraSupport);
             using var texture = d3dSurface.QueryInterface<SharpDX.Direct3D11.Texture2D>();
+
+            var d3d11Device = texture.Device;
 
             var stagingDesc = texture.Description;
             stagingDesc.Usage = SharpDX.Direct3D11.ResourceUsage.Staging;
