@@ -77,9 +77,10 @@ namespace Monitoring
                     excluded = true;
                 }
 
-                if (!excluded && config.IsBrowserProcess(window.ProcessName))
+                if (!excluded && config.ExcludedSites.Count > 0)
                 {
-                    if (config.IsSiteExcluded(window.Title))
+                    var isBrowser = config.BrowserProcessNames.Count == 0 || config.IsBrowserProcess(window.ProcessName);
+                    if (isBrowser && config.IsSiteExcluded(window.Title))
                         excluded = true;
                 }
 
