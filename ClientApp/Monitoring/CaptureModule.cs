@@ -72,9 +72,6 @@ namespace Monitoring
 
         private async Task<string?> CaptureMonitorAsync()
         {
-            Direct3D11CaptureFramePool? framePool = null;
-            Windows.Graphics.Capture.GraphicsCaptureSession? session = null;
-
             try
             {
                 if (_d3dDevice == null)
@@ -84,18 +81,73 @@ namespace Monitoring
                     System.Diagnostics.Debug.WriteLine("[Capture] D3D device created");
                 }
 
-                var item = GraphicsCaptureHelper.CreateItemForMonitor(_hwnd);
-                if (item == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[Capture] Failed to create GraphicsCaptureItem");
+                var monitors = GraphicsCaptureHelper.GetAllMonitors();
+                System.Diagnostics.Debug.WriteLine($"[Capture] Found {monitors.Count} monitor(s)");
+
+                if (monitors.Count == 0)
                     return null;
+
+                var virtualScreen = SystemInformation.VirtualScreen;
+                var combinedBitmap = new Bitmap(virtualScreen.Width, virtualScreen.Height, PixelFormat.Format32bppArgb);
+                using var g = Graphics.FromImage(combinedBitmap);
+                g.Clear(Color.Black);
+
+                foreach (var mon in monitors)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Capturing monitor at ({mon.X},{mon.Y}) {mon.Width}x{mon.Height}");
+
+                    var frame = await CaptureSingleMonitorAsync(mon.Handle);
+                    if (frame == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Capture] Failed to capture monitor 0x{mon.Handle.ToInt64():X}");
+                        continue;
+                    }
+
+                    using (frame)
+                    {
+                        var tempFile = Path.Combine(_logFolder, $"_temp_{Guid.NewGuid():N}.png");
+                        await ConvertFrameToFileAsync(frame, tempFile);
+
+                        using var monBitmap = new Bitmap(tempFile);
+                        var offsetX = mon.X - virtualScreen.X;
+                        var offsetY = mon.Y - virtualScreen.Y;
+                        g.DrawImage(monBitmap, offsetX, offsetY);
+
+                        try { File.Delete(tempFile); } catch { }
+                    }
                 }
 
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                var resultPath = Path.Combine(_logFolder, fileName);
+
+                await Task.Run(() => combinedBitmap.Save(resultPath, ImageFormat.Png));
+                combinedBitmap.Dispose();
+
+                System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
+                return resultPath;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Capture] Error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+                return null;
+            }
+        }
+
+        private async Task<Direct3D11CaptureFrame?> CaptureSingleMonitorAsync(IntPtr hmon)
+        {
+            Direct3D11CaptureFramePool? framePool = null;
+            Windows.Graphics.Capture.GraphicsCaptureSession? session = null;
+
+            try
+            {
+                var item = GraphicsCaptureHelper.CreateItemForMonitorHandle(hmon);
+                if (item == null)
+                    return null;
+
                 var size = item.Size;
-                System.Diagnostics.Debug.WriteLine($"[Capture] Item size: {size.Width}x{size.Height}");
 
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
-                    _d3dDevice,
+                    _d3dDevice!,
                     DirectXPixelFormat.B8G8R8A8UIntNormalized,
                     1,
                     size);
@@ -120,7 +172,6 @@ namespace Monitoring
 
                 framePool.FrameArrived += OnFrameArrived;
                 session.StartCapture();
-                System.Diagnostics.Debug.WriteLine("[Capture] Session started, waiting for frame...");
 
                 var captureTask = tcs.Task;
                 var timeoutTask = Task.Delay(5000);
@@ -134,29 +185,7 @@ namespace Monitoring
                     return null;
                 }
 
-                var capturedFrame = await captureTask;
-                if (capturedFrame == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[Capture] No frame received");
-                    return null;
-                }
-
-                using (capturedFrame)
-                {
-                    System.Diagnostics.Debug.WriteLine("[Capture] Frame received, converting to bitmap...");
-                    var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                    var resultPath = Path.Combine(_logFolder, fileName);
-
-                    await ConvertFrameToFileAsync(capturedFrame, resultPath);
-
-                    System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
-                    return resultPath;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Capture] Error: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
-                return null;
+                return await captureTask;
             }
             finally
             {

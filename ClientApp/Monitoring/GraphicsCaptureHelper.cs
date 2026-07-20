@@ -45,6 +45,70 @@ namespace Monitoring
 
         private const uint MONITOR_DEFAULTTOPRIMARY = 1;
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MONITORINFOEX
+        {
+            public uint cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string szDevice;
+        }
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
+        private delegate bool EnumMonitorsProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, EnumMonitorsProc lpfnEnum, IntPtr dwData);
+
+        public class MonitorInfo
+        {
+            public IntPtr Handle { get; set; }
+            public int X { get; set; }
+            public int Y { get; set; }
+            public int Width { get; set; }
+            public int Height { get; set; }
+        }
+
+        public static List<MonitorInfo> GetAllMonitors()
+        {
+            var monitors = new List<MonitorInfo>();
+
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMon, IntPtr hdc, ref RECT rect, IntPtr data) =>
+            {
+                var info = new MONITORINFOEX();
+                info.cbSize = (uint)Marshal.SizeOf<MONITORINFOEX>();
+                if (GetMonitorInfo(hMon, ref info))
+                {
+                    monitors.Add(new MonitorInfo
+                    {
+                        Handle = hMon,
+                        X = info.rcMonitor.Left,
+                        Y = info.rcMonitor.Top,
+                        Width = info.rcMonitor.Right - info.rcMonitor.Left,
+                        Height = info.rcMonitor.Bottom - info.rcMonitor.Top
+                    });
+                }
+                return true;
+            }, IntPtr.Zero);
+
+            return monitors;
+        }
+
         public static GraphicsCaptureItem CreateItemForMonitor(IntPtr hwnd)
         {
             var hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
