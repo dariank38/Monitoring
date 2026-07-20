@@ -149,7 +149,7 @@ app.post('/api/worklogs', (req, res) => {
   if (!Array.isArray(logs)) return res.status(400).json({ error: 'logs array required' });
 
   const stmt = db.prepare(`
-    INSERT INTO work_logs (hardware_id, log_date, start_time, end_time, duration_sec, status, key_count, mouse_count)
+    INSERT OR IGNORE INTO work_logs (hardware_id, log_date, start_time, end_time, duration_sec, status, key_count, mouse_count)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
