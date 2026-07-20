@@ -312,6 +312,10 @@ namespace Monitoring
                             await PostScreenshotAsync(item.FilePath, item.CapturedAt);
                             TryDeleteFile(item.FilePath);
                         }
+                        else
+                        {
+                            LogError("FlushQueue", $"Screenshot file missing, skipping: {item.FilePath}");
+                        }
                     }
                     else if (item.Type == "worklogs" && item.LogsJson != null)
                     {
