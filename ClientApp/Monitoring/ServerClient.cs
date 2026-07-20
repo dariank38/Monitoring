@@ -63,6 +63,7 @@ namespace Monitoring
             public DateTime CapturedAt { get; set; }
             public string? LogsJson { get; set; }
             public int LogCount { get; set; }
+            public int OriginalLastSentLine { get; set; }
         }
 
         public ServerClient()
@@ -264,7 +265,8 @@ namespace Monitoring
                     {
                         Type = "worklogs",
                         LogsJson = logsJson,
-                        LogCount = newLogs.Count
+                        LogCount = newLogs.Count,
+                        OriginalLastSentLine = lastSentLine
                     });
                     SaveQueue();
                 }
@@ -320,8 +322,9 @@ namespace Monitoring
                     else if (item.Type == "worklogs" && item.LogsJson != null)
                     {
                         await PostWorkLogsAsync(item.LogsJson);
+                        var newMarker = item.OriginalLastSentLine + item.LogCount;
                         var currentLine = GetLastSentLogLine();
-                        SetLastSentLogLine(currentLine + item.LogCount);
+                        SetLastSentLogLine(Math.Max(currentLine, newMarker));
                     }
                 }
                 catch (Exception ex)

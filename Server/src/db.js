@@ -31,6 +31,7 @@ db.exec(`
     status TEXT NOT NULL,
     key_count INTEGER NOT NULL DEFAULT 0,
     mouse_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(hardware_id, log_date, start_time, end_time),
     FOREIGN KEY (hardware_id) REFERENCES machines(hardware_id)
   );
 
