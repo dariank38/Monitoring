@@ -8,7 +8,7 @@ namespace Monitoring
         public List<string> ExcludedSites { get; set; } = new();
         public List<string> BrowserProcessNames { get; set; } = new();
 
-        public const string DefaultConfigPath = Path.Combine(AppContext.BaseDirectory, "Logs", "exclusions.json");
+        public static readonly string DefaultConfigPath = Path.Combine(AppContext.BaseDirectory, "Logs", "exclusions.json");
 
         public static ExclusionConfig Load(string? path = null)
         {
