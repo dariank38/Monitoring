@@ -8,7 +8,7 @@ namespace Monitoring
     {
         private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const int DefaultIntervalMs = 90_000;
-        private const int IndicatorSize = 16;
+        private const int IndicatorSize = 10;
         private static readonly Random Rng = new();
 
         private static readonly Color[] PulseColors =
