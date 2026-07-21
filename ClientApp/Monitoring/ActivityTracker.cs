@@ -8,6 +8,7 @@ namespace Monitoring
         private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const string ActivityLogFile = "ActivityLog.csv";
         private const int IdleThresholdSec = 300; // 5 minutes of no activity = idle
+        private const int AwayThresholdSec = 900; // 15 minutes of no activity = away
         private const int SaveIntervalSec = 60; // save work time every 60 seconds
 
         private readonly System.Windows.Forms.Timer _checkTimer;
@@ -15,6 +16,7 @@ namespace Monitoring
         private DateTime _sessionStart = DateTime.Now;
         private DateTime _lastSaveTime = DateTime.Now;
         private bool _isActive = true;
+        private bool _isAway = false;
         private int _keyCount;
         private int _mouseCount;
 
@@ -49,6 +51,7 @@ namespace Monitoring
             _lastActivityTime = DateTime.Now;
             _lastSaveTime = DateTime.Now;
             _isActive = true;
+            _isAway = false;
             _keyCount = 0;
             _mouseCount = 0;
 
@@ -76,6 +79,7 @@ namespace Monitoring
             if (!_isActive)
             {
                 _isActive = true;
+                _isAway = false;
                 _sessionStart = DateTime.Now;
                 ActivityChanged?.Invoke(this, EventArgs.Empty);
             }
@@ -88,6 +92,7 @@ namespace Monitoring
             if (!_isActive)
             {
                 _isActive = true;
+                _isAway = false;
                 _sessionStart = DateTime.Now;
                 ActivityChanged?.Invoke(this, EventArgs.Empty);
             }
@@ -98,9 +103,28 @@ namespace Monitoring
             var now = DateTime.Now;
             var idleSeconds = (now - _lastActivityTime).TotalSeconds;
 
-            if (_isActive && idleSeconds > IdleThresholdSec)
+            if (_isActive && idleSeconds > AwayThresholdSec)
             {
                 _isActive = false;
+                _isAway = true;
+                SaveSession();
+                _sessionStart = now;
+                _lastSaveTime = now;
+                ActivityChanged?.Invoke(this, EventArgs.Empty);
+            }
+            else if (_isActive && idleSeconds > IdleThresholdSec)
+            {
+                _isActive = false;
+                _isAway = false;
+                SaveSession();
+                _sessionStart = now;
+                _lastSaveTime = now;
+                ActivityChanged?.Invoke(this, EventArgs.Empty);
+            }
+            else if (!_isActive && !_isAway && idleSeconds > AwayThresholdSec)
+            {
+                // Transition from Idle to Away
+                _isAway = true;
                 SaveSession();
                 _sessionStart = now;
                 _lastSaveTime = now;
@@ -135,7 +159,7 @@ namespace Monitoring
                     $"{_sessionStart:HH:mm:ss}," +
                     $"{end:HH:mm:ss}," +
                     $"{duration}," +
-                    $"{(_isActive ? "Active" : "Idle")}," +
+                    $"{(_isActive ? "Active" : _isAway ? "Away" : "Idle")}," +
                     $"{_keyCount}," +
                     $"{_mouseCount}");
 

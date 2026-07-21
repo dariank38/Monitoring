@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import db from '../db.js';
 import { uploadsDir, thumbsDir } from '../config.js';
 import { toLaosTime, laosNowSqlite, sanitizePathComponent, asyncHandler } from '../utils.js';
+import { broadcastScreenshot } from '../ws.js';
 
 const router = express.Router();
 
@@ -99,6 +100,11 @@ router.post('/screenshots', upload.single('screenshot'), asyncHandler(async (req
     VALUES (?, ?, ?, ?)
   `);
   stmt.run(hardwareId, finalFilename, capturedAt, fileSize);
+
+  const screenshotRow = db.prepare('SELECT id FROM screenshots WHERE hardware_id = ? AND filename = ?').get(hardwareId, finalFilename);
+  if (screenshotRow) {
+    broadcastScreenshot(hardwareId, computerName, screenshotRow.id, capturedAt);
+  }
 
   res.json({ ok: true, filename: finalFilename });
 }));

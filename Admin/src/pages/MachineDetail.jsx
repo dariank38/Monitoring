@@ -58,6 +58,14 @@ export default function MachineDetail() {
     return summary.reduce((sum, r) => sum + (r.active_sec || 0), 0)
   }, [summary])
 
+  const totalIdleSec = useMemo(() => {
+    return summary.reduce((sum, r) => sum + (r.idle_sec || 0), 0)
+  }, [summary])
+
+  const totalAwaySec = useMemo(() => {
+    return summary.reduce((sum, r) => sum + (r.away_sec || 0), 0)
+  }, [summary])
+
   const loadScreenshots = useCallback(async (date, hour) => {
     const data = await fetchScreenshots(hardwareId, PAGE_SIZE, undefined, date, hour, rangeParams.from, rangeParams.to)
     setScreenshots(data.items)
@@ -381,10 +389,18 @@ export default function MachineDetail() {
               <h3 className="text-sm font-medium text-slate-700 mb-4">
                 Total Work Time ({appliedFrom} to {appliedTo})
               </h3>
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="rounded-lg bg-green-50 border border-green-100 p-4">
-                  <div className="text-xs text-green-600 mb-1">Total Work Time</div>
+                  <div className="text-xs text-green-600 mb-1">Active</div>
                   <div className="text-2xl font-bold text-green-700">{formatDuration(totalActiveSec)}</div>
+                </div>
+                <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-4">
+                  <div className="text-xs text-yellow-600 mb-1">Idle</div>
+                  <div className="text-2xl font-bold text-yellow-700">{formatDuration(totalIdleSec)}</div>
+                </div>
+                <div className="rounded-lg bg-slate-100 border border-slate-200 p-4">
+                  <div className="text-xs text-slate-500 mb-1">Away</div>
+                  <div className="text-2xl font-bold text-slate-600">{formatDuration(totalAwaySec)}</div>
                 </div>
               </div>
             </div>
@@ -402,6 +418,14 @@ export default function MachineDetail() {
                       <div className="text-lg font-semibold text-green-600">
                         {formatDuration(row.active_sec)}
                       </div>
+                      <div className="text-xs text-yellow-600 mt-1">
+                        Idle: {formatDuration(row.idle_sec)}
+                      </div>
+                      {row.away_sec > 0 && (
+                        <div className="text-xs text-slate-500">
+                          Away: {formatDuration(row.away_sec)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

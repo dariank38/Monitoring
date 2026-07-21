@@ -6,6 +6,7 @@ import { adminAuth } from './auth.js';
 import { markOfflineMachines, cleanupOldScreenshots, cleanupOrphanedFiles } from './cleanup.js';
 import clientRoutes from './routes/client.js';
 import adminRoutes from './routes/admin.js';
+import { initWebSocket } from './ws.js';
 
 const app = express();
 
@@ -45,6 +46,8 @@ if (fs.existsSync(adminDist)) {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Monitoring server running on http://0.0.0.0:${PORT}`);
+  initWebSocket(server);
+  console.log(`WebSocket server running on ws://0.0.0.0:${PORT}/ws`);
 });
 
 // Graceful shutdown
