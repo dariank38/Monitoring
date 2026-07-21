@@ -123,6 +123,67 @@ router.get('/screenshots/:id/thumbnail', (req, res) => {
     .catch(() => res.status(500).json({ error: 'Thumbnail generation failed' }));
 });
 
+// --- Screenshot deletion ---
+
+router.delete('/screenshots/:id', (req, res) => {
+  const { id } = req.params;
+  const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
+  if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
+
+  const safeHw = sanitizePathComponent(screenshot.hardware_id);
+  const filePath = path.join(uploadsDir, safeHw, screenshot.filename);
+  const thumbPath = path.join(thumbsDir, `${safeHw}_${screenshot.filename}`);
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+  try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
+
+  db.prepare('DELETE FROM screenshots WHERE id = ?').run(id);
+  res.json({ ok: true });
+});
+
+router.delete('/machines/:hardwareId/screenshots', (req, res) => {
+  const { hardwareId } = req.params;
+  const { date, hour, from, to } = req.query;
+
+  let query = 'SELECT id, hardware_id, filename FROM screenshots WHERE hardware_id = ?';
+  const params = [hardwareId];
+
+  if (date) {
+    query += ' AND captured_at LIKE ?';
+    params.push(`${date}%`);
+    if (hour !== undefined) {
+      const h = String(hour).padStart(2, '0');
+      query += ' AND captured_at LIKE ?';
+      params.push(`${date} ${h}:%`);
+    }
+  }
+  if (from) {
+    query += ' AND captured_at >= ?';
+    params.push(from);
+  }
+  if (to) {
+    query += ' AND captured_at <= ?';
+    params.push(to);
+  }
+
+  const screenshots = db.prepare(query).all(...params);
+  const safeHw = sanitizePathComponent(hardwareId);
+
+  for (const s of screenshots) {
+    const filePath = path.join(uploadsDir, safeHw, s.filename);
+    const thumbPath = path.join(thumbsDir, `${safeHw}_${s.filename}`);
+    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+    try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
+  }
+
+  const ids = screenshots.map(s => s.id);
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',');
+    db.prepare(`DELETE FROM screenshots WHERE id IN (${placeholders})`).run(...ids);
+  }
+
+  res.json({ ok: true, deleted: ids.length });
+});
+
 // --- Work Logs ---
 
 router.get('/machines/:hardwareId/worklogs', (req, res) => {
