@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Lock, Loader2 } from 'lucide-react'
-import { verifyToken, setToken } from '../lib/api'
+import { verifyPassword, setPassword } from '../lib/api'
 
 export default function Login({ onSuccess }) {
-  const [token, setTokenInput] = useState('')
+  const [password, setPasswordInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -12,12 +12,12 @@ export default function Login({ onSuccess }) {
     setLoading(true)
     setError('')
     try {
-      const ok = await verifyToken(token.trim())
+      const ok = await verifyPassword(password)
       if (ok) {
-        setToken(token.trim())
+        setPassword(password)
         onSuccess()
       } else {
-        setError('Invalid token')
+        setError('Invalid password')
       }
     } catch (err) {
       setError('Connection failed')
@@ -35,16 +35,16 @@ export default function Login({ onSuccess }) {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-slate-900">Admin Login</h1>
-            <p className="text-xs text-slate-400">Enter your access token</p>
+            <p className="text-xs text-slate-400">Enter your password</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <input
             type="password"
-            value={token}
-            onChange={(e) => setTokenInput(e.target.value)}
-            placeholder="Admin token"
+            value={password}
+            onChange={(e) => setPasswordInput(e.target.value)}
+            placeholder="Password"
             autoFocus
             className="w-full border rounded-md px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
           />
@@ -53,7 +53,7 @@ export default function Login({ onSuccess }) {
           )}
           <button
             type="submit"
-            disabled={loading || !token.trim()}
+            disabled={loading || !password}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Login'}
@@ -61,7 +61,7 @@ export default function Login({ onSuccess }) {
         </form>
 
         <p className="text-xs text-slate-400 mt-4 text-center">
-          Run <code className="bg-slate-100 px-1 rounded">node scripts/show-token.js</code> on the server to get the token.
+          Default password is <code className="bg-slate-100 px-1 rounded">admin</code>. Change it in <code className="bg-slate-100 px-1 rounded">Server/.admin-password</code>.
         </p>
       </div>
     </div>

@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import db from '../db.js';
 import { uploadsDir, thumbsDir } from '../config.js';
 import { sanitizePathComponent } from '../utils.js';
-import { adminAuth, ADMIN_TOKEN } from '../auth.js';
+import { adminAuth, ADMIN_PASSWORD } from '../auth.js';
 
 const router = express.Router();
 
@@ -14,11 +14,11 @@ const router = express.Router();
 router.post('/auth/verify', (req, res) => {
   const authHeader = req.headers.authorization || '';
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-  const token = bearerMatch ? bearerMatch[1] : req.body?.token;
-  if (token === ADMIN_TOKEN) {
+  const password = bearerMatch ? bearerMatch[1] : req.body?.password;
+  if (password === ADMIN_PASSWORD) {
     return res.json({ ok: true });
   }
-  res.status(401).json({ error: 'Invalid token' });
+  res.status(401).json({ error: 'Invalid password' });
 });
 
 // --- All routes below require admin auth ---

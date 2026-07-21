@@ -1,29 +1,29 @@
-import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const tokenFile = path.join(__dirname, '..', '.admin-token');
+const passwordFile = path.join(__dirname, '..', '.admin-password');
 
-function loadAdminToken() {
-  if (process.env.ADMIN_TOKEN) return process.env.ADMIN_TOKEN;
+function loadAdminPassword() {
+  if (process.env.ADMIN_PASSWORD) return process.env.ADMIN_PASSWORD;
   try {
-    if (fs.existsSync(tokenFile)) return fs.readFileSync(tokenFile, 'utf8').trim();
+    if (fs.existsSync(passwordFile)) return fs.readFileSync(passwordFile, 'utf8').trim();
   } catch {}
-  const token = crypto.randomBytes(32).toString('hex');
-  try { fs.writeFileSync(tokenFile, token, { mode: 0o600 }); } catch {}
-  console.log(`[auth] Generated new admin token. Run 'node scripts/show-token.js' to view it.`);
-  return token;
+  // Default password on first run
+  const defaultPassword = 'admin';
+  try { fs.writeFileSync(passwordFile, defaultPassword, { mode: 0o600 }); } catch {}
+  console.log(`[auth] Created default admin password "admin". Change it in Server/.admin-password or set ADMIN_PASSWORD env var.`);
+  return defaultPassword;
 }
 
-export const ADMIN_TOKEN = loadAdminToken();
+export const ADMIN_PASSWORD = loadAdminPassword();
 
 export function adminAuth(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-  const token = bearerMatch ? bearerMatch[1] : req.query.token;
-  if (token !== ADMIN_TOKEN) {
+  const password = bearerMatch ? bearerMatch[1] : req.query.token;
+  if (password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
