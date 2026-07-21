@@ -14,6 +14,7 @@ namespace Monitoring
         private const int HeartbeatIntervalSec = 30;
         private const string QueueFile = "sync_queue.json";
         private const string SentLogMarker = "last_sent_log.txt";
+        private const string ActivityLogFile = "ActivityLog.csv";
 
         private readonly HttpClient _http;
         private readonly string _hardwareId;
@@ -25,34 +26,10 @@ namespace Monitoring
         private bool _heartbeatRunning;
         private bool _flushRunning;
         private readonly object _queueLock = new();
-        private static readonly string ErrorLogFile = Path.Combine(LogFolder, "error.log");
         private const int MaxQueuedScreenshots = 50;
 
         public event Action<int>? CaptureIntervalChanged;
-
-        private static void LogError(string context, Exception ex)
-        {
-            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n";
-            System.Diagnostics.Debug.WriteLine(msg);
-            try
-            {
-                Directory.CreateDirectory(LogFolder);
-                File.AppendAllText(ErrorLogFile, msg + "\n");
-            }
-            catch { }
-        }
-
-        private static void LogError(string context, string message)
-        {
-            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {message}";
-            System.Diagnostics.Debug.WriteLine(msg);
-            try
-            {
-                Directory.CreateDirectory(LogFolder);
-                File.AppendAllText(ErrorLogFile, msg + "\n");
-            }
-            catch { }
-        }
+        public event Action<bool>? ServerOnlineChanged;
 
         private List<PendingItem> _queue = new();
 
@@ -147,8 +124,12 @@ namespace Monitoring
                 });
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var resp = await _http.PostAsync($"{_serverUrl}/api/heartbeat", content);
+                var wasOnlineBefore = _serverOnline;
                 _serverOnline = resp.IsSuccessStatusCode;
                 System.Diagnostics.Debug.WriteLine($"[Heartbeat] Status: {resp.StatusCode}, Online: {_serverOnline}");
+
+                if (_serverOnline != wasOnlineBefore)
+                    ServerOnlineChanged?.Invoke(_serverOnline);
 
                 if (_serverOnline)
                 {
@@ -164,8 +145,10 @@ namespace Monitoring
             }
             catch (Exception ex)
             {
+                if (_serverOnline)
+                    ServerOnlineChanged?.Invoke(false);
                 _serverOnline = false;
-                LogError("Heartbeat", ex);
+                Logger.Log("Heartbeat", ex);
             }
 
             try
@@ -192,8 +175,10 @@ namespace Monitoring
                 }
                 catch (Exception ex)
                 {
+                    if (_serverOnline)
+                        ServerOnlineChanged?.Invoke(false);
                     _serverOnline = false;
-                    LogError("UploadScreenshot", ex);
+                    Logger.Log("UploadScreenshot", ex);
                 }
             }
 
@@ -208,7 +193,7 @@ namespace Monitoring
                         TryDeleteFile(oldest.FilePath);
                         _queue.Remove(oldest);
                     }
-                    LogError("UploadScreenshot", $"Queue full ({MaxQueuedScreenshots} screenshots), dropped oldest");
+                    Logger.Log("UploadScreenshot", $"Queue full ({MaxQueuedScreenshots} screenshots), dropped oldest");
                 }
 
                 _queue.Add(new PendingItem
@@ -251,12 +236,15 @@ namespace Monitoring
                     {
                         await PostWorkLogsAsync(logsJson);
                         SetLastSentLogLine(lastSentLine + newLogs.Count);
+                        PruneActivityLog(lastSentLine + newLogs.Count);
                         return;
                     }
                     catch (Exception ex)
                     {
+                        if (_serverOnline)
+                            ServerOnlineChanged?.Invoke(false);
                         _serverOnline = false;
-                        LogError("UploadWorkLogs", ex);
+                        Logger.Log("UploadWorkLogs", ex);
                     }
                 }
 
@@ -274,7 +262,7 @@ namespace Monitoring
             }
             catch (Exception ex)
             {
-                LogError("UploadWorkLogs", ex);
+                Logger.Log("UploadWorkLogs", ex);
             }
         }
 
@@ -313,10 +301,11 @@ namespace Monitoring
                         if (File.Exists(item.FilePath))
                         {
                             await PostScreenshotAsync(item.FilePath, item.CapturedAt);
+                            TryDeleteFile(item.FilePath);
                         }
                         else
                         {
-                            LogError("FlushQueue", $"Screenshot file missing, skipping: {item.FilePath}");
+                            Logger.Log("FlushQueue", $"Screenshot file missing, skipping: {item.FilePath}");
                         }
                     }
                     else if (item.Type == "worklogs" && item.LogsJson != null)
@@ -325,13 +314,16 @@ namespace Monitoring
                         var newMarker = item.OriginalLastSentLine + item.LogCount;
                         var currentLine = GetLastSentLogLine();
                         SetLastSentLogLine(Math.Max(currentLine, newMarker));
+                        PruneActivityLog(GetLastSentLogLine());
                     }
                 }
                 catch (Exception ex)
                 {
+                    if (_serverOnline)
+                        ServerOnlineChanged?.Invoke(false);
                     _serverOnline = false;
                     failed = true;
-                    LogError("FlushQueue", ex);
+                    Logger.Log("FlushQueue", ex);
                     remaining.Add(item);
                 }
             }
@@ -361,6 +353,7 @@ namespace Monitoring
 
             var resp = await _http.PostAsync($"{_serverUrl}/api/screenshots", form);
             resp.EnsureSuccessStatusCode();
+            TryDeleteFile(filePath);
         }
 
         private async Task PostWorkLogsAsync(string logsJson)
@@ -433,14 +426,32 @@ namespace Monitoring
             }
             catch (Exception ex)
             {
-                LogError(context, ex);
+                Logger.Log(context, ex);
             }
         }
 
         private static void TryDeleteFile(string path)
         {
             try { if (File.Exists(path)) File.Delete(path); }
-            catch (Exception ex) { LogError("FileCleanup", ex); }
+            catch (Exception ex) { Logger.Log("FileCleanup", ex); }
+        }
+
+        private static void PruneActivityLog(int keepFromLine)
+        {
+            try
+            {
+                var filePath = Path.Combine(LogFolder, ActivityLogFile);
+                if (!File.Exists(filePath)) return;
+                var lines = File.ReadAllLines(filePath);
+                if (keepFromLine >= lines.Length - 1) return;
+                var header = lines.Length > 0 ? lines[0] : null;
+                var sb = new StringBuilder();
+                if (header != null) sb.AppendLine(header);
+                for (var i = keepFromLine + 1; i < lines.Length; i++)
+                    sb.AppendLine(lines[i]);
+                File.WriteAllText(filePath, sb.ToString());
+            }
+            catch (Exception ex) { Logger.Log("PruneActivityLog", ex); }
         }
     }
 }

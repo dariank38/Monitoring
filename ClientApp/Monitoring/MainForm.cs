@@ -9,11 +9,6 @@ namespace Monitoring
         private static readonly string LogFolder = Path.Combine(AppContext.BaseDirectory, "Logs");
         private const int DefaultIntervalMs = 90_000;
         private const int IndicatorSize = 10;
-
-        private static readonly Color[] PulseColors =
-        {
-            Color.Red, Color.Green, Color.Blue, Color.Black, Color.White
-        };
         private const int PulseIntervalMs = 2000;
 
         private readonly System.Windows.Forms.Timer _captureTimer;
@@ -23,6 +18,7 @@ namespace Monitoring
         private bool _isCapturing;
         private int _colorIndex;
         private readonly List<IndicatorForm> _indicators = new();
+        private bool _serverOnline;
 
         public MainForm()
         {
@@ -36,6 +32,7 @@ namespace Monitoring
             _activityTracker = new ActivityTracker();
             _serverClient = new ServerClient();
             _serverClient.CaptureIntervalChanged += OnCaptureIntervalChanged;
+            _serverClient.ServerOnlineChanged += OnServerOnlineChanged;
 
             foreach (var screen in Screen.AllScreens)
             {
@@ -75,10 +72,11 @@ namespace Monitoring
 
         private void PulseTimer_Tick(object? sender, EventArgs e)
         {
-            var color = PulseColors[_colorIndex];
+            var baseColors = _serverOnline
+                ? new[] { Color.Green, Color.LimeGreen }
+                : new[] { Color.Red, Color.DarkRed };
+            var color = baseColors[_colorIndex % baseColors.Length];
             _colorIndex++;
-            if (_colorIndex >= PulseColors.Length)
-                _colorIndex = 0;
 
             BackColor = color;
 
@@ -112,6 +110,11 @@ namespace Monitoring
             await Task.Delay(100);
             await CaptureScreenAsync();
             _captureTimer.Start();
+        }
+
+        private void OnServerOnlineChanged(bool online)
+        {
+            _serverOnline = online;
         }
 
         private void OnCaptureIntervalChanged(int intervalSec)
@@ -170,7 +173,7 @@ namespace Monitoring
             }
             catch (Exception ex)
             {
-                LogError("CaptureScreen", ex);
+                Logger.Log("CaptureScreen", ex);
             }
             finally
             {
@@ -178,28 +181,5 @@ namespace Monitoring
             }
         }
 
-        private static void LogError(string context, Exception ex)
-        {
-            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}\n";
-            System.Diagnostics.Debug.WriteLine(msg);
-            try
-            {
-                Directory.CreateDirectory(LogFolder);
-                File.AppendAllText(Path.Combine(LogFolder, "error.log"), msg + "\n");
-            }
-            catch { }
-        }
-
-        private static void LogError(string context, string message)
-        {
-            var msg = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{context}] {message}";
-            System.Diagnostics.Debug.WriteLine(msg);
-            try
-            {
-                Directory.CreateDirectory(LogFolder);
-                File.AppendAllText(Path.Combine(LogFolder, "error.log"), msg + "\n");
-            }
-            catch { }
-        }
     }
 }

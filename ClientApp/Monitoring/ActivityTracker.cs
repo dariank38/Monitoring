@@ -276,6 +276,11 @@ namespace Monitoring
     internal sealed class LowLevelMouseHook
     {
         private const int WH_MOUSE_LL = 14;
+        private const int WM_LBUTTONDOWN = 0x0201;
+        private const int WM_RBUTTONDOWN = 0x0204;
+        private const int WM_MBUTTONDOWN = 0x0207;
+        private const int WM_MOUSEWHEEL = 0x020A;
+        private const int WM_XBUTTONDOWN = 0x020B;
         private readonly Action _callback;
         private IntPtr _hookId = IntPtr.Zero;
         private LowLevelHookProc? _hookProc;
@@ -306,7 +311,12 @@ namespace Monitoring
         {
             if (nCode >= 0)
             {
-                _callback();
+                var msg = (int)wParam;
+                if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN ||
+                    msg == WM_MOUSEWHEEL || msg == WM_XBUTTONDOWN)
+                {
+                    _callback();
+                }
             }
             return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
         }

@@ -8,6 +8,15 @@ namespace Monitoring
         [STAThread]
         static void Main()
         {
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                Logger.Log("UnhandledException", (Exception)e.ExceptionObject);
+            };
+            Application.ThreadException += (_, e) =>
+            {
+                Logger.Log("ThreadException", e.Exception);
+            };
+
             var current = System.Diagnostics.Process.GetCurrentProcess();
             foreach (var proc in System.Diagnostics.Process.GetProcessesByName(current.ProcessName))
             {
