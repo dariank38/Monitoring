@@ -72,7 +72,7 @@ export default function ScreenshotSlider({ screenshots, onClose, onImageClick, t
         <img
           key={current.id}
           src={screenshotUrl(current.id)}
-          alt={current.filename}
+          alt="Screenshot"
           className="max-h-[500px] max-w-full object-contain cursor-zoom-in"
           onClick={() => onImageClick?.(index)}
         />
@@ -108,7 +108,7 @@ export default function ScreenshotSlider({ screenshots, onClose, onImageClick, t
             >
               <img
                 src={thumbnailUrl(s.id)}
-                alt={s.filename}
+                alt="Screenshot"
                 className="w-20 h-12 object-cover"
                 loading="lazy"
                 decoding="async"

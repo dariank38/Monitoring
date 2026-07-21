@@ -125,7 +125,7 @@ export default function ImageModal({ screenshots, index, onClose, onNavigate, ti
 
         <img
           src={screenshotUrl(current.id)}
-          alt={current.filename}
+          alt="Screenshot"
           className="max-h-full max-w-full object-contain select-none transition-transform"
           style={{
             transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,

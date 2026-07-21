@@ -352,13 +352,12 @@ export default function MachineDetail() {
                       </button>
                       <img
                         src={thumbnailUrl(s.id)}
-                        alt={s.filename}
+                        alt="Screenshot"
                         className="w-full h-32 object-cover group-hover:opacity-80 transition-opacity"
                         loading="lazy"
                         decoding="async"
                       />
                       <div className="p-2">
-                        <div className="text-xs text-slate-500 truncate">{s.filename}</div>
                         <div className="text-xs text-slate-600 mt-0.5">🇱🇦 {formatDateTimeLaos(s.captured_at)}</div>
                         <div className="text-[10px] text-slate-400">💻 {formatDateTimeClientTZ(s.captured_at, machine.timezone)}</div>
                       </div>
