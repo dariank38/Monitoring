@@ -353,7 +353,8 @@ namespace Monitoring
             using var form = new MultipartFormDataContent();
             using var fileStream = File.OpenRead(filePath);
             using var fileContent = new StreamContent(fileStream);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(
+                Path.GetExtension(filePath).Equals(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
 
             form.Add(fileContent, "screenshot", Path.GetFileName(filePath));
             form.Add(new StringContent(capturedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")), "captured_at");

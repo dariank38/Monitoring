@@ -137,10 +137,16 @@ namespace Monitoring
                     }
                 }
 
-                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 var resultPath = Path.Combine(_logFolder, fileName);
 
-                await Task.Run(() => combinedBitmap.Save(resultPath, ImageFormat.Png));
+                await Task.Run(() =>
+                {
+                    var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
+                    combinedBitmap.Save(resultPath, jpegEncoder, encoderParams);
+                });
                 combinedBitmap.Dispose();
 
                 System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
@@ -163,9 +169,15 @@ namespace Monitoring
                 {
                     g.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
                 }
-                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 var filePath = Path.Combine(_logFolder, fileName);
-                await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
+                await Task.Run(() =>
+                {
+                    var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
+                    bitmap.Save(filePath, jpegEncoder, encoderParams);
+                });
                 System.Diagnostics.Debug.WriteLine($"[Capture] Fallback saved: {filePath}");
                 return filePath;
             }
