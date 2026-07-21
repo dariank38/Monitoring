@@ -10,7 +10,7 @@ export const LAOS_OFFSET_HOURS = parseInt(process.env.TZ_OFFSET_HOURS || '7', 10
 
 export const uploadsDir = path.join(__dirname, '..', 'uploads');
 export const thumbsDir = path.join(__dirname, '..', 'uploads', '_thumbs');
-export const adminDist = path.join(__dirname, '..', 'admin', 'build');
+export const adminDist = path.join(__dirname, '..', '..', 'Admin', 'build');
 
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(thumbsDir)) fs.mkdirSync(thumbsDir, { recursive: true });
