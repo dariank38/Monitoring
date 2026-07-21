@@ -153,10 +153,16 @@ namespace Monitoring
                     graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bitmap.Size);
                 }
 
-                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+                var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 var filePath = Path.Combine(LogFolder, fileName);
 
-                await Task.Run(() => bitmap.Save(filePath, ImageFormat.Png));
+                await Task.Run(() =>
+                {
+                    var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
+                    bitmap.Save(filePath, jpegEncoder, encoderParams);
+                });
 
                 _ = _serverClient.UploadScreenshotAsync(filePath, DateTime.Now);
 

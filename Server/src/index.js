@@ -118,28 +118,34 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
   const capturedAt = toLaosTime(req.body.captured_at || new Date().toISOString());
   const origPath = path.join(uploadsDir, hardwareId, req.file.originalname);
 
-  const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');
-  const jpegPath = path.join(uploadsDir, hardwareId, jpegFilename);
+  const isJpeg = /\.jpe?g$/i.test(req.file.originalname);
+  const finalFilename = req.file.originalname;
+  const finalPath = origPath;
 
-  try {
-    await sharp(origPath).jpeg({ quality: 80 }).toFile(jpegPath);
-  } catch (e) {
-    console.error('[screenshot] sharp conversion failed:', e.message);
+  if (!isJpeg) {
+    const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');
+    const jpegPath = path.join(uploadsDir, hardwareId, jpegFilename);
+    try {
+      await sharp(origPath).jpeg({ quality: 80 }).toFile(jpegPath);
+    } catch (e) {
+      console.error('[screenshot] sharp conversion failed:', e.message);
+    }
+    try { fs.unlinkSync(origPath); } catch {}
+    finalFilename = jpegFilename;
+    finalPath = jpegPath;
   }
 
-  try { fs.unlinkSync(origPath); } catch {}
-
-  const thumbName = jpegFilename;
+  const thumbName = finalFilename;
   const thumbPath = path.join(thumbsDir, thumbName);
-  sharp(jpegPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
+  sharp(finalPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
 
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO screenshots (hardware_id, filename, captured_at, file_size)
     VALUES (?, ?, ?, ?)
   `);
-  stmt.run(hardwareId, jpegFilename, capturedAt, req.file.size);
+  stmt.run(hardwareId, finalFilename, capturedAt, req.file.size);
 
-  res.json({ ok: true, filename: jpegFilename });
+  res.json({ ok: true, filename: finalFilename });
 });
 
 app.post('/api/worklogs', (req, res) => {
