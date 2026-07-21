@@ -19,7 +19,7 @@ namespace Monitoring
         private readonly string _hardwareId;
         private readonly string _computerName;
         private readonly string _timezone;
-        private readonly string _serverUrl;
+        private string _serverUrl;
         private readonly System.Windows.Forms.Timer _heartbeatTimer;
         private bool _serverOnline;
         private bool _heartbeatRunning;
@@ -116,6 +116,53 @@ namespace Monitoring
 
             System.Diagnostics.Debug.WriteLine($"[ServerClient] Using default server URL: {DefaultServerUrl}");
             return DefaultServerUrl;
+        }
+
+        private static void SaveServerUrl(string url)
+        {
+            try
+            {
+                Directory.CreateDirectory(LogFolder);
+                var configPath = Path.Combine(LogFolder, ConfigFile);
+                string json;
+                if (File.Exists(configPath))
+                {
+                    var existing = File.ReadAllText(configPath);
+                    using var doc = JsonDocument.Parse(existing);
+                    var writer = new StringBuilder("{");
+                    var first = true;
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.Name == "server_url") continue;
+                        if (!first) writer.Append(',');
+                        first = false;
+                        writer.Append($"\"{prop.Name}\":{prop.Value.GetRawText()}");
+                    }
+                    if (!first) writer.Append(',');
+                    writer.Append($"\"server_url\":\"{url}\"}}");
+                    json = writer.ToString();
+                }
+                else
+                {
+                    json = $"{{\"server_url\":\"{url}\"}}";
+                }
+                File.WriteAllText(configPath, json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ServerClient] Failed to save config: {ex.Message}");
+            }
+        }
+
+        public string GetCurrentServerUrl() => _serverUrl;
+
+        public void UpdateServerUrl(string url)
+        {
+            url = url.TrimEnd('/');
+            _serverUrl = url;
+            SaveServerUrl(url);
+            _ = RunSafeAsync(HeartbeatTickAsync, "UpdateServerUrl");
+            System.Diagnostics.Debug.WriteLine($"[ServerClient] Server URL updated to: {url}");
         }
 
         public void Start()

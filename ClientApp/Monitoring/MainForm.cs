@@ -75,6 +75,19 @@ namespace Monitoring
             NativeMethods.RegisterHotKey(Handle, HotkeyId,
                 NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT | NativeMethods.MOD_ALT,
                 (uint)Keys.Oem2);
+
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("View Work Logs", null, (_, _) => MainForm_DoubleClick(null, EventArgs.Empty));
+            contextMenu.Items.Add("Server Settings...", null, (_, _) =>
+            {
+                _pulseTimer.Stop();
+                using var settingsForm = new SettingsForm(_serverClient);
+                settingsForm.ShowDialog();
+                _pulseTimer.Start();
+            });
+            contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add("Exit", null, (_, _) => Close());
+            ContextMenuStrip = contextMenu;
         }
 
         protected override void WndProc(ref Message m)
