@@ -397,17 +397,30 @@ namespace Monitoring
 
         private async Task PostScreenshotAsync(string filePath, DateTime capturedAt)
         {
-            using var form = new MultipartFormDataContent();
-            using var fileStream = File.OpenRead(filePath);
-            using var fileContent = new StreamContent(fileStream);
-            fileContent.Headers.ContentType = new MediaTypeHeaderValue(
-                Path.GetExtension(filePath).Equals(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
+            MultipartFormDataContent? form = null;
+            FileStream? fileStream = null;
+            StreamContent? fileContent = null;
+            try
+            {
+                form = new MultipartFormDataContent();
+                fileStream = File.OpenRead(filePath);
+                fileContent = new StreamContent(fileStream);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(
+                    Path.GetExtension(filePath).Equals(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
 
-            form.Add(fileContent, "screenshot", Path.GetFileName(filePath));
-            form.Add(new StringContent(capturedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")), "captured_at");
+                form.Add(fileContent, "screenshot", Path.GetFileName(filePath));
+                form.Add(new StringContent(capturedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")), "captured_at");
 
-            var resp = await _http.PostAsync($"{_serverUrl}/api/screenshots", form);
-            resp.EnsureSuccessStatusCode();
+                var resp = await _http.PostAsync($"{_serverUrl}/api/screenshots", form);
+                resp.EnsureSuccessStatusCode();
+            }
+            finally
+            {
+                fileContent?.Dispose();
+                fileStream?.Dispose();
+                form?.Dispose();
+            }
+            TryDeleteFile(filePath);
         }
 
         private async Task PostWorkLogsAsync(string logsJson)
@@ -486,8 +499,12 @@ namespace Monitoring
 
         private static void TryDeleteFile(string path)
         {
-            try { if (File.Exists(path)) File.Delete(path); }
-            catch (Exception ex) { LogError("FileCleanup", ex); }
+            for (int i = 0; i < 3; i++)
+            {
+                try { if (File.Exists(path)) File.Delete(path); return; }
+                catch (IOException) { if (i < 2) Thread.Sleep(500); }
+                catch (Exception ex) { LogError("FileCleanup", ex); return; }
+            }
         }
     }
 }
