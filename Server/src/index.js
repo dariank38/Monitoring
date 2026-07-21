@@ -78,7 +78,7 @@ function cleanupOldScreenshots() {
   const old = db.prepare('SELECT id, hardware_id, filename FROM screenshots WHERE captured_at < ?').all(cutoff);
   for (const s of old) {
     const filePath = path.join(uploadsDir, s.hardware_id, s.filename);
-    const thumbPath = path.join(thumbsDir, s.filename.replace(/\.png$/i, '.jpg'));
+    const thumbPath = path.join(thumbsDir, `${s.hardware_id}_${s.filename.replace(/\.png$/i, '.jpg')}`);
     try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
     try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
   }
@@ -114,7 +114,7 @@ function cleanupOrphanedFiles() {
 
   // Clean orphaned thumbnails
   if (fs.existsSync(thumbsDir)) {
-    const dbThumbs = new Set(rows.map(r => path.join(thumbsDir, r.filename)));
+    const dbThumbs = new Set(rows.map(r => path.join(thumbsDir, `${r.hardware_id}_${r.filename}`)));
     for (const file of fs.readdirSync(thumbsDir)) {
       const thumbPath = path.join(thumbsDir, file);
       if (!dbThumbs.has(thumbPath)) {
@@ -173,7 +173,7 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
     finalPath = jpegPath;
   }
 
-  const thumbName = finalFilename;
+  const thumbName = `${hardwareId}_${finalFilename}`;
   const thumbPath = path.join(thumbsDir, thumbName);
   try {
     await sharp(finalPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath);
@@ -307,7 +307,7 @@ app.get('/api/screenshots/:id/thumbnail', (req, res) => {
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
 
-  const thumbPath = path.join(thumbsDir, screenshot.filename);
+  const thumbPath = path.join(thumbsDir, `${screenshot.hardware_id}_${screenshot.filename}`);
 
   if (fs.existsSync(thumbPath)) {
     res.set('Cache-Control', 'public, max-age=86400');
