@@ -9,7 +9,7 @@ Server/.admin-password
 
 # Admin (React/Vite)
 Admin/node_modules/
-Admin/dist/
+Admin/build/
 
 # ClientApp (.NET)
 ClientApp/**/bin/
