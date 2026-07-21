@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Monitor, Circle, Camera, Clock, Settings as SettingsIcon } from 'lucide-react'
-import { fetchMachines, thumbnailUrl } from '../lib/api'
+import { fetchMachines, thumbnailUrl, clearToken } from '../lib/api'
 import { formatDuration, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 
 export default function Dashboard() {
@@ -14,6 +14,7 @@ export default function Dashboard() {
         const data = await fetchMachines()
         setMachines(data)
       } catch (e) {
+        if (e.message === 'Unauthorized') { clearToken(); window.location.reload(); return }
         console.error('Failed to fetch machines', e)
       } finally {
         setLoading(false)
@@ -36,6 +37,13 @@ export default function Dashboard() {
           <Link to="/settings" className="text-slate-400 hover:text-slate-700 ml-2">
             <SettingsIcon className="w-5 h-5" />
           </Link>
+          <button
+            onClick={() => { clearToken(); window.location.reload() }}
+            className="text-slate-400 hover:text-red-600 ml-2 text-sm"
+            title="Logout"
+          >
+            Logout
+          </button>
         </div>
       </header>
 

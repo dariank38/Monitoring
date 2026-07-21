@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 import db from './db.js';
@@ -39,6 +40,32 @@ app.use(express.json({ limit: '10mb' }));
 // Prevent path traversal: allow only safe characters in path components
 function sanitizePathComponent(name) {
   return String(name || '').replace(/[^a-zA-Z0-9_\-.]/g, '_').replace(/\.\.+/g, '_') || 'unknown';
+}
+
+// --- Admin token auth ---
+// Load or generate a persistent admin token
+const tokenFile = path.join(__dirname, '..', '.admin-token');
+function loadAdminToken() {
+  if (process.env.ADMIN_TOKEN) return process.env.ADMIN_TOKEN;
+  try {
+    if (fs.existsSync(tokenFile)) return fs.readFileSync(tokenFile, 'utf8').trim();
+  } catch {}
+  // Generate a random token and save it
+  const token = crypto.randomBytes(32).toString('hex');
+  try { fs.writeFileSync(tokenFile, token, { mode: 0o600 }); } catch {}
+  console.log(`[auth] Generated new admin token. Run 'node scripts/show-token.js' to view it.`);
+  return token;
+}
+const ADMIN_TOKEN = loadAdminToken();
+
+function adminAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = bearerMatch ? bearerMatch[1] : req.query.token;
+  if (token !== ADMIN_TOKEN) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
 }
 
 const storage = multer.diskStorage({
@@ -242,7 +269,17 @@ app.post('/api/worklogs', (req, res) => {
 
 // --- Admin API ---
 
-app.get('/api/machines', (req, res) => {
+app.post('/api/auth/verify', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = bearerMatch ? bearerMatch[1] : req.body?.token;
+  if (token === ADMIN_TOKEN) {
+    return res.json({ ok: true });
+  }
+  res.status(401).json({ error: 'Invalid token' });
+});
+
+app.get('/api/machines', adminAuth, (req, res) => {
   const machines = db.prepare(`
     SELECT m.*,
       (SELECT COUNT(*) FROM screenshots WHERE hardware_id = m.hardware_id) as screenshot_count,
@@ -254,14 +291,14 @@ app.get('/api/machines', (req, res) => {
   res.json(machines);
 });
 
-app.get('/api/machines/:hardwareId', (req, res) => {
+app.get('/api/machines/:hardwareId', adminAuth, (req, res) => {
   const { hardwareId } = req.params;
   const machine = db.prepare('SELECT * FROM machines WHERE hardware_id = ?').get(hardwareId);
   if (!machine) return res.status(404).json({ error: 'Machine not found' });
   res.json(machine);
 });
 
-app.get('/api/machines/:hardwareId/screenshots', (req, res) => {
+app.get('/api/machines/:hardwareId/screenshots', adminAuth, (req, res) => {
   const { hardwareId } = req.params;
   const { limit = 24, cursor, date, hour, from, to } = req.query;
 
@@ -303,7 +340,7 @@ app.get('/api/machines/:hardwareId/screenshots', (req, res) => {
   res.json({ items, nextCursor, hasMore });
 });
 
-app.get('/api/screenshots/:id/file', (req, res) => {
+app.get('/api/screenshots/:id/file', adminAuth, (req, res) => {
   const { id } = req.params;
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
@@ -315,7 +352,7 @@ app.get('/api/screenshots/:id/file', (req, res) => {
   res.sendFile(filePath);
 });
 
-app.get('/api/screenshots/:id/thumbnail', (req, res) => {
+app.get('/api/screenshots/:id/thumbnail', adminAuth, (req, res) => {
   const { id } = req.params;
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
@@ -339,7 +376,7 @@ app.get('/api/screenshots/:id/thumbnail', (req, res) => {
     .catch(() => res.status(500).json({ error: 'Thumbnail generation failed' }));
 });
 
-app.get('/api/machines/:hardwareId/worklogs', (req, res) => {
+app.get('/api/machines/:hardwareId/worklogs', adminAuth, (req, res) => {
   const { hardwareId } = req.params;
   const { date } = req.query;
 
@@ -356,7 +393,7 @@ app.get('/api/machines/:hardwareId/worklogs', (req, res) => {
   res.json(logs);
 });
 
-app.get('/api/machines/:hardwareId/worklogs/summary', (req, res) => {
+app.get('/api/machines/:hardwareId/worklogs/summary', adminAuth, (req, res) => {
   const { hardwareId } = req.params;
   const { days, from, to } = req.query;
   let query = `
@@ -385,7 +422,7 @@ app.get('/api/machines/:hardwareId/worklogs/summary', (req, res) => {
   res.json(summary);
 });
 
-app.get('/api/machines/:hardwareId/worklogs/heatmap', (req, res) => {
+app.get('/api/machines/:hardwareId/worklogs/heatmap', adminAuth, (req, res) => {
   const { hardwareId } = req.params;
   const { days, from, to } = req.query;
   let query = `
@@ -453,18 +490,18 @@ app.get('/api/machines/:hardwareId/worklogs/heatmap', (req, res) => {
   res.json(Object.values(buckets));
 });
 
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', adminAuth, express.static(uploadsDir));
 
 // --- Admin Settings API ---
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', adminAuth, (req, res) => {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
   for (const row of rows) settings[row.key] = row.value;
   res.json(settings);
 });
 
-app.put('/api/settings', (req, res) => {
+app.put('/api/settings', adminAuth, (req, res) => {
   const { capture_interval_sec } = req.body;
   const updates = [];
   if (capture_interval_sec !== undefined) {
