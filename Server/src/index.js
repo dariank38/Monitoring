@@ -157,8 +157,8 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
   const origPath = path.join(uploadsDir, hardwareId, req.file.originalname);
 
   const isJpeg = /\.jpe?g$/i.test(req.file.originalname);
-  const finalFilename = req.file.originalname;
-  const finalPath = origPath;
+  let finalFilename = req.file.originalname;
+  let finalPath = origPath;
 
   if (!isJpeg) {
     const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');
