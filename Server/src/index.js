@@ -17,7 +17,7 @@ const thumbsDir = path.join(__dirname, '..', 'uploads', '_thumbs');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(thumbsDir)) fs.mkdirSync(thumbsDir, { recursive: true });
 
-const RETENTION_DAYS = 7;
+const RETENTION_DAYS = 180;
 const LAOS_OFFSET_HOURS = 7;
 
 // Convert UTC ISO string to Laos time (UTC+7) in 'YYYY-MM-DD HH:MM:SS' format
@@ -88,6 +88,44 @@ function cleanupOldScreenshots() {
   }
 }
 setInterval(cleanupOldScreenshots, 3600000);
+
+// On startup: delete orphaned files not referenced in DB (failed sharp, old PNGs, temp files)
+function cleanupOrphanedFiles() {
+  const dbFiles = new Set();
+  const rows = db.prepare('SELECT hardware_id, filename FROM screenshots').all();
+  for (const r of rows) {
+    dbFiles.add(path.join(uploadsDir, r.hardware_id, r.filename));
+  }
+
+  let deleted = 0;
+  const machineDirs = fs.existsSync(uploadsDir)
+    ? fs.readdirSync(uploadsDir).filter(d => d !== '_thumbs' && fs.statSync(path.join(uploadsDir, d)).isDirectory())
+    : [];
+
+  for (const dir of machineDirs) {
+    const dirPath = path.join(uploadsDir, dir);
+    for (const file of fs.readdirSync(dirPath)) {
+      const fullPath = path.join(dirPath, file);
+      if (!dbFiles.has(fullPath)) {
+        try { fs.unlinkSync(fullPath); deleted++; } catch {}
+      }
+    }
+  }
+
+  // Clean orphaned thumbnails
+  if (fs.existsSync(thumbsDir)) {
+    const dbThumbs = new Set(rows.map(r => path.join(thumbsDir, r.filename)));
+    for (const file of fs.readdirSync(thumbsDir)) {
+      const thumbPath = path.join(thumbsDir, file);
+      if (!dbThumbs.has(thumbPath)) {
+        try { fs.unlinkSync(thumbPath); deleted++; } catch {}
+      }
+    }
+  }
+
+  if (deleted > 0) console.log(`[startup-cleanup] Deleted ${deleted} orphaned file(s)`);
+}
+cleanupOrphanedFiles();
 
 // --- Client API -----
 
