@@ -36,19 +36,24 @@ function laosNowSqlite() {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Prevent path traversal: allow only safe characters in path components
+function sanitizePathComponent(name) {
+  return String(name || '').replace(/[^a-zA-Z0-9_\-.]/g, '_').replace(/\.\.+/g, '_') || 'unknown';
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const machineDir = path.join(uploadsDir, req.headers['x-hardware-id'] || 'unknown');
+    const machineDir = path.join(uploadsDir, sanitizePathComponent(req.headers['x-hardware-id']));
     if (!fs.existsSync(machineDir)) {
       fs.mkdirSync(machineDir, { recursive: true });
     }
     cb(null, machineDir);
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
+    cb(null, sanitizePathComponent(file.originalname));
   }
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 function upsertMachine(hardwareId, computerName, timezone) {
   const stmt = db.prepare(`
@@ -77,8 +82,9 @@ function cleanupOldScreenshots() {
   const cutoff = toLaosTime(cutoffUtc);
   const old = db.prepare('SELECT id, hardware_id, filename FROM screenshots WHERE captured_at < ?').all(cutoff);
   for (const s of old) {
-    const filePath = path.join(uploadsDir, s.hardware_id, s.filename);
-    const thumbPath = path.join(thumbsDir, `${s.hardware_id}_${s.filename.replace(/\.png$/i, '.jpg')}`);
+    const safeHw = sanitizePathComponent(s.hardware_id);
+    const filePath = path.join(uploadsDir, safeHw, s.filename);
+    const thumbPath = path.join(thumbsDir, `${safeHw}_${s.filename.replace(/\.png$/i, '.jpg')}`);
     try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
     try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
   }
@@ -94,7 +100,7 @@ function cleanupOrphanedFiles() {
   const dbFiles = new Set();
   const rows = db.prepare('SELECT hardware_id, filename FROM screenshots').all();
   for (const r of rows) {
-    dbFiles.add(path.join(uploadsDir, r.hardware_id, r.filename));
+    dbFiles.add(path.join(uploadsDir, sanitizePathComponent(r.hardware_id), r.filename));
   }
 
   let deleted = 0;
@@ -114,7 +120,7 @@ function cleanupOrphanedFiles() {
 
   // Clean orphaned thumbnails
   if (fs.existsSync(thumbsDir)) {
-    const dbThumbs = new Set(rows.map(r => path.join(thumbsDir, `${r.hardware_id}_${r.filename}`)));
+    const dbThumbs = new Set(rows.map(r => path.join(thumbsDir, `${sanitizePathComponent(r.hardware_id)}_${r.filename}`)));
     for (const file of fs.readdirSync(thumbsDir)) {
       const thumbPath = path.join(thumbsDir, file);
       if (!dbThumbs.has(thumbPath)) {
@@ -153,27 +159,31 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
 
   if (!req.file) return res.status(400).json({ error: 'screenshot file required' });
 
+  const safeHardwareId = sanitizePathComponent(hardwareId);
+  const safeFilename = sanitizePathComponent(req.file.originalname);
   const capturedAt = toLaosTime(req.body.captured_at || new Date().toISOString());
-  const origPath = path.join(uploadsDir, hardwareId, req.file.originalname);
+  const origPath = path.join(uploadsDir, safeHardwareId, safeFilename);
 
-  const isJpeg = /\.jpe?g$/i.test(req.file.originalname);
-  let finalFilename = req.file.originalname;
+  const isJpeg = /\.jpe?g$/i.test(safeFilename);
+  let finalFilename = safeFilename;
   let finalPath = origPath;
 
   if (!isJpeg) {
-    const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');
-    const jpegPath = path.join(uploadsDir, hardwareId, jpegFilename);
+    const jpegFilename = safeFilename.replace(/\.png$/i, '.jpg');
+    const jpegPath = path.join(uploadsDir, safeHardwareId, jpegFilename);
     try {
       await sharp(origPath).jpeg({ quality: 80 }).toFile(jpegPath);
     } catch (e) {
       console.error('[screenshot] sharp conversion failed:', e.message);
+      // Keep the original file and reject: don't delete data or insert a broken DB row
+      return res.status(422).json({ error: 'image conversion failed' });
     }
     try { fs.unlinkSync(origPath); } catch {}
     finalFilename = jpegFilename;
     finalPath = jpegPath;
   }
 
-  const thumbName = `${hardwareId}_${finalFilename}`;
+  const thumbName = `${safeHardwareId}_${finalFilename}`;
   const thumbPath = path.join(thumbsDir, thumbName);
   try {
     await sharp(finalPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath);
@@ -181,11 +191,14 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
     console.error('[screenshot] thumbnail generation failed:', e.message);
   }
 
+  let fileSize = req.file.size;
+  try { fileSize = fs.statSync(finalPath).size; } catch {}
+
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO screenshots (hardware_id, filename, captured_at, file_size)
     VALUES (?, ?, ?, ?)
   `);
-  stmt.run(hardwareId, finalFilename, capturedAt, req.file.size);
+  stmt.run(hardwareId, finalFilename, capturedAt, fileSize);
 
   res.json({ ok: true, filename: finalFilename });
 });
@@ -261,7 +274,7 @@ app.get('/api/machines/:hardwareId/screenshots', (req, res) => {
     if (hour !== undefined) {
       const h = String(hour).padStart(2, '0');
       query += ' AND captured_at LIKE ?';
-      params.push(`%T${h}:%`);
+      params.push(`${date} ${h}:%`);
     }
   }
 
@@ -295,7 +308,7 @@ app.get('/api/screenshots/:id/file', (req, res) => {
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
 
-  const filePath = path.join(uploadsDir, screenshot.hardware_id, screenshot.filename);
+  const filePath = path.join(uploadsDir, sanitizePathComponent(screenshot.hardware_id), screenshot.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
 
   res.set('Cache-Control', 'public, max-age=86400');
@@ -307,14 +320,15 @@ app.get('/api/screenshots/:id/thumbnail', (req, res) => {
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
 
-  const thumbPath = path.join(thumbsDir, `${screenshot.hardware_id}_${screenshot.filename}`);
+  const safeHw = sanitizePathComponent(screenshot.hardware_id);
+  const thumbPath = path.join(thumbsDir, `${safeHw}_${screenshot.filename}`);
 
   if (fs.existsSync(thumbPath)) {
     res.set('Cache-Control', 'public, max-age=86400');
     return res.sendFile(thumbPath);
   }
 
-  const filePath = path.join(uploadsDir, screenshot.hardware_id, screenshot.filename);
+  const filePath = path.join(uploadsDir, safeHw, screenshot.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
 
   sharp(filePath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath)
@@ -410,7 +424,10 @@ app.get('/api/machines/:hardwareId/worklogs/heatmap', (req, res) => {
       hourEnd.setHours(hourEnd.getHours() + 1);
       const segEnd = end < hourEnd ? end : hourEnd;
       const segSec = Math.floor((segEnd - current) / 1000);
-      const dateKey = current.toISOString().slice(0, 10);
+      const y = current.getFullYear();
+      const mo = String(current.getMonth() + 1).padStart(2, '0');
+      const da = String(current.getDate()).padStart(2, '0');
+      const dateKey = `${y}-${mo}-${da}`;
       const hour = current.getHours();
       const key = `${dateKey}|${hour}`;
 
@@ -424,10 +441,10 @@ app.get('/api/machines/:hardwareId/worklogs/heatmap', (req, res) => {
         };
       }
 
-      const ratio = segSec / log.duration_sec;
+      const ratio = log.duration_sec > 0 ? segSec / log.duration_sec : 0;
       buckets[key].active_sec += segSec;
-      buckets[key].key_count += Math.round(log.key_count * ratio);
-      buckets[key].mouse_count += Math.round(log.mouse_count * ratio);
+      buckets[key].key_count += Math.round((log.key_count || 0) * ratio);
+      buckets[key].mouse_count += Math.round((log.mouse_count || 0) * ratio);
 
       current = segEnd;
     }
@@ -458,6 +475,11 @@ app.put('/api/settings', (req, res) => {
   const stmt = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
   for (const [key, value] of updates) stmt.run(key, value);
   res.json({ ok: true });
+});
+
+// Unknown API routes return JSON 404, not the SPA shell
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 // Serve React admin panel (production build)
