@@ -3,7 +3,7 @@ import cors from 'cors';
 import fs from 'fs';
 import { PORT, uploadsDir, thumbsDir, adminDist } from './config.js';
 import { adminAuth } from './auth.js';
-import { markOfflineMachines, cleanupOldScreenshots, cleanupOrphanedFiles } from './cleanup.js';
+import { markOfflineMachines, cleanupOrphanedFiles } from './cleanup.js';
 import clientRoutes from './routes/client.js';
 import adminRoutes from './routes/admin.js';
 import { initWebSocket } from './ws.js';
@@ -16,7 +16,6 @@ app.use(express.json({ limit: '10mb' }));
 // --- Background tasks ---
 
 setInterval(markOfflineMachines, 10000);
-setInterval(cleanupOldScreenshots, 3600000);
 setImmediate(cleanupOrphanedFiles);
 
 // --- Routes ---

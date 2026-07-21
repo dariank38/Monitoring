@@ -25,30 +25,15 @@ namespace Monitoring
             Directory.CreateDirectory(_logFolder);
 
             var excludedWindows = applyExclusions ? GetExcludedWindows(ExclusionConfig.Load(_configPath)) : new List<WindowInfo>();
-            var affinityWindows = new List<IntPtr>();
             var hiddenWindows = new List<IntPtr>();
 
             foreach (var window in excludedWindows)
             {
                 try
                 {
-                    if (window.IsSiteExclusion)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Capture] Site exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
-                        WindowHelper.HideWindow(window.Handle);
-                        hiddenWindows.Add(window.Handle);
-                    }
-                    else if (WindowHelper.ExcludeFromCapture(window.Handle))
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: affinity {window.ProcessName} - \"{window.Title}\"");
-                        affinityWindows.Add(window.Handle);
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[Capture] Process exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
-                        WindowHelper.HideWindow(window.Handle);
-                        hiddenWindows.Add(window.Handle);
-                    }
+                    System.Diagnostics.Debug.WriteLine($"[Capture] Exclusion: hiding {window.ProcessName} - \"{window.Title}\"");
+                    WindowHelper.HideWindow(window.Handle);
+                    hiddenWindows.Add(window.Handle);
                 }
                 catch (Exception ex)
                 {
@@ -56,7 +41,7 @@ namespace Monitoring
                 }
             }
 
-            if (affinityWindows.Count > 0 || hiddenWindows.Count > 0)
+            if (hiddenWindows.Count > 0)
                 await Task.Delay(200);
 
             string? filePath = null;
@@ -72,11 +57,6 @@ namespace Monitoring
             }
             finally
             {
-                foreach (var hWnd in affinityWindows)
-                {
-                    try { WindowHelper.RestoreCapture(hWnd); }
-                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Capture] Failed to restore affinity: {ex.Message}"); }
-                }
                 foreach (var hWnd in hiddenWindows)
                 {
                     try { WindowHelper.ShowWindow(hWnd); }

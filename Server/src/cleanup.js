@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import db from './db.js';
-import { uploadsDir, thumbsDir, RETENTION_DAYS, LAOS_OFFSET_HOURS } from './config.js';
+import { uploadsDir, thumbsDir, LAOS_OFFSET_HOURS } from './config.js';
 import { toLaosTime, sanitizePathComponent } from './utils.js';
 
 export function markOfflineMachines() {
@@ -9,23 +9,6 @@ export function markOfflineMachines() {
     UPDATE machines SET is_online = 0
     WHERE last_seen < datetime('now', '+${LAOS_OFFSET_HOURS} hours', '-60 seconds')
   `).run();
-}
-
-export function cleanupOldScreenshots() {
-  const cutoffUtc = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString();
-  const cutoff = toLaosTime(cutoffUtc);
-  const old = db.prepare('SELECT id, hardware_id, filename FROM screenshots WHERE captured_at < ?').all(cutoff);
-  for (const s of old) {
-    const safeHw = sanitizePathComponent(s.hardware_id);
-    const filePath = path.join(uploadsDir, safeHw, s.filename);
-    const thumbPath = path.join(thumbsDir, `${safeHw}_${s.filename.replace(/\.png$/i, '.jpg')}`);
-    try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
-    try { if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath); } catch {}
-  }
-  if (old.length > 0) {
-    db.prepare('DELETE FROM screenshots WHERE captured_at < ?').run(cutoff);
-    console.log(`[cleanup] Deleted ${old.length} screenshots older than ${RETENTION_DAYS} days`);
-  }
 }
 
 export function cleanupOrphanedFiles() {
