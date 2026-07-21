@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Grid, Film, Loader2, Calendar, X } from 'lucide-react'
-import { fetchMachine, fetchScreenshots, fetchHeatmap, fetchWorkLogSummary, screenshotUrl, thumbnailUrl } from '../lib/api'
+import { fetchMachine, fetchScreenshots, fetchHeatmap, fetchWorkLogSummary, screenshotUrl, thumbnailUrl, clearToken } from '../lib/api'
 import { formatDuration, formatDateTime, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 import HeatmapTimeline from '../components/HeatmapTimeline.jsx'
 import ScreenshotSlider from '../components/ScreenshotSlider.jsx'
@@ -92,6 +92,7 @@ export default function MachineDetail() {
         setHeatmap(hm)
         setSummary(sm)
       } catch (e) {
+        if (e.message === 'Unauthorized') { clearToken(); window.location.reload(); return }
         console.error('Failed to fetch machine detail', e)
       } finally {
         setLoading(false)
