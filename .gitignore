@@ -5,7 +5,7 @@ Server/monitoring.db
 Server/monitoring.db-wal
 Server/monitoring.db-shm
 Server/.env
-Server/.admin-token
+Server/.admin-password
 
 # Admin (React/Vite)
 Admin/node_modules/

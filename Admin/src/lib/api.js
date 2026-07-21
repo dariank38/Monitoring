@@ -1,24 +1,24 @@
 const API_BASE = ''
 
-export function getToken() {
-  return localStorage.getItem('admin_token') || ''
+export function getPassword() {
+  return localStorage.getItem('admin_password') || ''
 }
 
-export function setToken(token) {
-  localStorage.setItem('admin_token', token)
+export function setPassword(password) {
+  localStorage.setItem('admin_password', password)
 }
 
-export function clearToken() {
-  localStorage.removeItem('admin_token')
+export function clearPassword() {
+  localStorage.removeItem('admin_password')
 }
 
 export function isAuthenticated() {
-  return !!getToken()
+  return !!getPassword()
 }
 
 function authHeaders() {
-  const token = getToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const password = getPassword()
+  return password ? { Authorization: `Bearer ${password}` } : {}
 }
 
 function authJson(url, options = {}) {
@@ -31,11 +31,11 @@ function authJson(url, options = {}) {
   })
 }
 
-export async function verifyToken(token) {
+export async function verifyPassword(password) {
   const res = await fetch(`${API_BASE}/api/auth/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ password }),
   })
   return res.ok
 }
@@ -98,13 +98,13 @@ export async function fetchHeatmap(hardwareId, days, from, to) {
 }
 
 export function screenshotUrl(id) {
-  const token = getToken()
-  return `${API_BASE}/api/screenshots/${id}/file?token=${encodeURIComponent(token)}`
+  const password = getPassword()
+  return `${API_BASE}/api/screenshots/${id}/file?token=${encodeURIComponent(password)}`
 }
 
 export function thumbnailUrl(id) {
-  const token = getToken()
-  return `${API_BASE}/api/screenshots/${id}/thumbnail?token=${encodeURIComponent(token)}`
+  const password = getPassword()
+  return `${API_BASE}/api/screenshots/${id}/thumbnail?token=${encodeURIComponent(password)}`
 }
 
 export async function fetchSettings() {
