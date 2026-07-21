@@ -38,6 +38,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_screenshots_hw ON screenshots(hardware_id);
   CREATE INDEX IF NOT EXISTS idx_screenshots_date ON screenshots(captured_at);
   CREATE INDEX IF NOT EXISTS idx_screenshots_hw_date ON screenshots(hardware_id, captured_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_screenshots_hw_filename ON screenshots(hardware_id, filename);
   CREATE INDEX IF NOT EXISTS idx_worklogs_hw ON work_logs(hardware_id);
   CREATE INDEX IF NOT EXISTS idx_worklogs_date ON work_logs(log_date);
   CREATE INDEX IF NOT EXISTS idx_worklogs_hw_date ON work_logs(hardware_id, log_date);

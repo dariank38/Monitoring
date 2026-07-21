@@ -130,7 +130,7 @@ app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
   sharp(origPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
 
   const stmt = db.prepare(`
-    INSERT INTO screenshots (hardware_id, filename, captured_at, file_size)
+    INSERT OR IGNORE INTO screenshots (hardware_id, filename, captured_at, file_size)
     VALUES (?, ?, ?, ?)
   `);
   stmt.run(hardwareId, jpegFilename, capturedAt, req.file.size);
