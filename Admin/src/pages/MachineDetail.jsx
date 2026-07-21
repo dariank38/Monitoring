@@ -38,6 +38,7 @@ export default function MachineDetail() {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const sentinelRef = useRef(null)
 
   // Shared date range
@@ -146,11 +147,13 @@ export default function MachineDetail() {
     e.stopPropagation()
     if (!confirm('Delete this screenshot?')) return
     setDeleting(true)
+    setDeleteError('')
     try {
       await deleteScreenshot(screenshotId)
       setScreenshots(prev => prev.filter(s => s.id !== screenshotId))
     } catch (e) {
       if (e.message === 'Unauthorized') { clearPassword(); window.location.reload(); return }
+      setDeleteError('Failed to delete screenshot')
       console.error('Failed to delete screenshot', e)
     } finally {
       setDeleting(false)
@@ -163,6 +166,7 @@ export default function MachineDetail() {
       : `${appliedFrom} to ${appliedTo}`
     if (!confirm(`Delete ALL screenshots${filterDate ? ' from' : ' in range'} ${label}? This cannot be undone.`)) return
     setDeleting(true)
+    setDeleteError('')
     try {
       const result = await deleteScreenshotsBulk(hardwareId, filterDate
         ? { date: filterDate, hour: filterHour }
@@ -171,9 +175,9 @@ export default function MachineDetail() {
       setScreenshots([])
       setCursor(null)
       setHasMore(false)
-      alert(`Deleted ${result.deleted} screenshot(s)`)
     } catch (e) {
       if (e.message === 'Unauthorized') { clearPassword(); window.location.reload(); return }
+      setDeleteError('Failed to delete screenshots')
       console.error('Failed to bulk delete screenshots', e)
     } finally {
       setDeleting(false)
@@ -284,9 +288,12 @@ export default function MachineDetail() {
                   disabled={deleting}
                   className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {filterDate ? 'Delete filtered' : 'Delete range'}
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {deleting ? 'Deleting...' : filterDate ? 'Delete filtered' : 'Delete range'}
                 </button>
+              )}
+              {deleteError && (
+                <span className="text-xs text-red-600">{deleteError}</span>
               )}
               <div className="flex bg-white border rounded-lg overflow-hidden">
                 <button

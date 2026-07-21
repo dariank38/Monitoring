@@ -4,7 +4,7 @@ import path from 'path';
 import sharp from 'sharp';
 import db from '../db.js';
 import { uploadsDir, thumbsDir } from '../config.js';
-import { sanitizePathComponent } from '../utils.js';
+import { sanitizePathComponent, asyncHandler, buildScreenshotFilter } from '../utils.js';
 import { adminAuth, ADMIN_PASSWORD } from '../auth.js';
 
 const router = express.Router();
@@ -27,70 +27,57 @@ router.use(adminAuth);
 
 // --- Machines ---
 
-router.get('/machines', (req, res) => {
+router.get('/machines', asyncHandler((req, res) => {
   const machines = db.prepare(`
+    WITH ss_stats AS (
+      SELECT hardware_id, COUNT(*) as screenshot_count, MAX(id) as latest_screenshot_id
+      FROM screenshots GROUP BY hardware_id
+    ),
+    wl_stats AS (
+      SELECT hardware_id, SUM(duration_sec) as total_active_sec
+      FROM work_logs WHERE status = 'Active' GROUP BY hardware_id
+    )
     SELECT m.*,
-      (SELECT COUNT(*) FROM screenshots WHERE hardware_id = m.hardware_id) as screenshot_count,
-      (SELECT SUM(duration_sec) FROM work_logs WHERE hardware_id = m.hardware_id AND status = 'Active') as total_active_sec,
-      (SELECT id FROM screenshots WHERE hardware_id = m.hardware_id ORDER BY id DESC LIMIT 1) as latest_screenshot_id
+      COALESCE(ss.screenshot_count, 0) as screenshot_count,
+      COALESCE(wl.total_active_sec, 0) as total_active_sec,
+      ss.latest_screenshot_id
     FROM machines m
+    LEFT JOIN ss_stats ss ON ss.hardware_id = m.hardware_id
+    LEFT JOIN wl_stats wl ON wl.hardware_id = m.hardware_id
     ORDER BY m.last_seen DESC
   `).all();
   res.json(machines);
-});
+}));
 
-router.get('/machines/:hardwareId', (req, res) => {
+router.get('/machines/:hardwareId', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const machine = db.prepare('SELECT * FROM machines WHERE hardware_id = ?').get(hardwareId);
   if (!machine) return res.status(404).json({ error: 'Machine not found' });
   res.json(machine);
-});
+}));
 
 // --- Screenshots ---
 
-router.get('/machines/:hardwareId/screenshots', (req, res) => {
+router.get('/machines/:hardwareId/screenshots', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const { limit = 24, cursor, date, hour, from, to } = req.query;
 
-  let query = 'SELECT * FROM screenshots WHERE hardware_id = ?';
-  const params = [hardwareId];
-
-  if (date) {
-    query += ' AND captured_at LIKE ?';
-    params.push(`${date}%`);
-    if (hour !== undefined) {
-      const h = String(hour).padStart(2, '0');
-      query += ' AND captured_at LIKE ?';
-      params.push(`${date} ${h}:%`);
-    }
-  }
-
-  if (from) {
-    query += ' AND captured_at >= ?';
-    params.push(from);
-  }
-  if (to) {
-    query += ' AND captured_at <= ?';
-    params.push(to);
-  }
-
-  if (cursor) {
-    query += ' AND id < ?';
-    params.push(Number(cursor));
-  }
+  const { clause, params } = buildScreenshotFilter({ date, hour, from, to, cursor });
+  let query = `SELECT * FROM screenshots WHERE hardware_id = ?${clause}`;
+  const allParams = [hardwareId, ...params];
 
   query += ' ORDER BY id DESC LIMIT ?';
-  params.push(Number(limit) + 1);
+  allParams.push(Number(limit) + 1);
 
-  const rows = db.prepare(query).all(...params);
+  const rows = db.prepare(query).all(...allParams);
   const hasMore = rows.length > Number(limit);
   const items = hasMore ? rows.slice(0, Number(limit)) : rows;
   const nextCursor = hasMore ? items[items.length - 1].id : null;
 
   res.json({ items, nextCursor, hasMore });
-});
+}));
 
-router.get('/screenshots/:id/file', (req, res) => {
+router.get('/screenshots/:id/file', asyncHandler((req, res) => {
   const { id } = req.params;
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
@@ -99,9 +86,9 @@ router.get('/screenshots/:id/file', (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
 
   res.sendFile(filePath);
-});
+}));
 
-router.get('/screenshots/:id/thumbnail', (req, res) => {
+router.get('/screenshots/:id/thumbnail', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
@@ -116,16 +103,13 @@ router.get('/screenshots/:id/thumbnail', (req, res) => {
   const filePath = path.join(uploadsDir, safeHw, screenshot.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
 
-  sharp(filePath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath)
-    .then(() => {
-      res.sendFile(thumbPath);
-    })
-    .catch(() => res.status(500).json({ error: 'Thumbnail generation failed' }));
-});
+  await sharp(filePath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath);
+  res.sendFile(thumbPath);
+}));
 
 // --- Screenshot deletion ---
 
-router.delete('/screenshots/:id', (req, res) => {
+router.delete('/screenshots/:id', asyncHandler((req, res) => {
   const { id } = req.params;
   const screenshot = db.prepare('SELECT * FROM screenshots WHERE id = ?').get(id);
   if (!screenshot) return res.status(404).json({ error: 'Screenshot not found' });
@@ -138,34 +122,15 @@ router.delete('/screenshots/:id', (req, res) => {
 
   db.prepare('DELETE FROM screenshots WHERE id = ?').run(id);
   res.json({ ok: true });
-});
+}));
 
-router.delete('/machines/:hardwareId/screenshots', (req, res) => {
+router.delete('/machines/:hardwareId/screenshots', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const { date, hour, from, to } = req.query;
 
-  let query = 'SELECT id, hardware_id, filename FROM screenshots WHERE hardware_id = ?';
-  const params = [hardwareId];
-
-  if (date) {
-    query += ' AND captured_at LIKE ?';
-    params.push(`${date}%`);
-    if (hour !== undefined) {
-      const h = String(hour).padStart(2, '0');
-      query += ' AND captured_at LIKE ?';
-      params.push(`${date} ${h}:%`);
-    }
-  }
-  if (from) {
-    query += ' AND captured_at >= ?';
-    params.push(from);
-  }
-  if (to) {
-    query += ' AND captured_at <= ?';
-    params.push(to);
-  }
-
-  const screenshots = db.prepare(query).all(...params);
+  const { clause, params } = buildScreenshotFilter({ date, hour, from, to });
+  const query = `SELECT id, hardware_id, filename FROM screenshots WHERE hardware_id = ?${clause}`;
+  const screenshots = db.prepare(query).all(hardwareId, ...params);
   const safeHw = sanitizePathComponent(hardwareId);
 
   for (const s of screenshots) {
@@ -182,11 +147,11 @@ router.delete('/machines/:hardwareId/screenshots', (req, res) => {
   }
 
   res.json({ ok: true, deleted: ids.length });
-});
+}));
 
 // --- Work Logs ---
 
-router.get('/machines/:hardwareId/worklogs', (req, res) => {
+router.get('/machines/:hardwareId/worklogs', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const { date } = req.query;
 
@@ -201,9 +166,9 @@ router.get('/machines/:hardwareId/worklogs', (req, res) => {
   query += ' ORDER BY log_date DESC, start_time DESC';
   const logs = db.prepare(query).all(...params);
   res.json(logs);
-});
+}));
 
-router.get('/machines/:hardwareId/worklogs/summary', (req, res) => {
+router.get('/machines/:hardwareId/worklogs/summary', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const { days, from, to } = req.query;
   let query = `
@@ -230,9 +195,9 @@ router.get('/machines/:hardwareId/worklogs/summary', (req, res) => {
   query += ` GROUP BY log_date ORDER BY log_date DESC`;
   const summary = db.prepare(query).all(...params);
   res.json(summary);
-});
+}));
 
-router.get('/machines/:hardwareId/worklogs/heatmap', (req, res) => {
+router.get('/machines/:hardwareId/worklogs/heatmap', asyncHandler((req, res) => {
   const { hardwareId } = req.params;
   const { days, from, to } = req.query;
   let query = `
@@ -298,18 +263,18 @@ router.get('/machines/:hardwareId/worklogs/heatmap', (req, res) => {
   }
 
   res.json(Object.values(buckets));
-});
+}));
 
 // --- Settings ---
 
-router.get('/settings', (req, res) => {
+router.get('/settings', asyncHandler((req, res) => {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const settings = {};
   for (const row of rows) settings[row.key] = row.value;
   res.json(settings);
-});
+}));
 
-router.put('/settings', (req, res) => {
+router.put('/settings', asyncHandler((req, res) => {
   const { capture_interval_sec } = req.body;
   const updates = [];
   if (capture_interval_sec !== undefined) {
@@ -320,6 +285,6 @@ router.put('/settings', (req, res) => {
   const stmt = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`);
   for (const [key, value] of updates) stmt.run(key, value);
   res.json({ ok: true });
-});
+}));
 
 export default router;
