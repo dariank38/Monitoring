@@ -98,7 +98,6 @@ router.get('/screenshots/:id/file', (req, res) => {
   const filePath = path.join(uploadsDir, sanitizePathComponent(screenshot.hardware_id), screenshot.filename);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
 
-  res.set('Cache-Control', 'public, max-age=86400');
   res.sendFile(filePath);
 });
 
@@ -111,7 +110,6 @@ router.get('/screenshots/:id/thumbnail', (req, res) => {
   const thumbPath = path.join(thumbsDir, `${safeHw}_${screenshot.filename}`);
 
   if (fs.existsSync(thumbPath)) {
-    res.set('Cache-Control', 'public, max-age=86400');
     return res.sendFile(thumbPath);
   }
 
@@ -120,7 +118,6 @@ router.get('/screenshots/:id/thumbnail', (req, res) => {
 
   sharp(filePath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath)
     .then(() => {
-      res.set('Cache-Control', 'public, max-age=86400');
       res.sendFile(thumbPath);
     })
     .catch(() => res.status(500).json({ error: 'Thumbnail generation failed' }));
