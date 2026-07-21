@@ -175,7 +175,11 @@ app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
 
   const thumbName = finalFilename;
   const thumbPath = path.join(thumbsDir, thumbName);
-  sharp(finalPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
+  try {
+    await sharp(finalPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath);
+  } catch (e) {
+    console.error('[screenshot] thumbnail generation failed:', e.message);
+  }
 
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO screenshots (hardware_id, filename, captured_at, file_size)
