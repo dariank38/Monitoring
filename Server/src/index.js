@@ -106,7 +106,7 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ ok: true, capture_interval_sec: captureIntervalSec });
 });
 
-app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
+app.post('/api/screenshots', upload.single('screenshot'), async (req, res) => {
   const hardwareId = req.headers['x-hardware-id'];
   const computerName = req.headers['x-computer-name'] || 'unknown';
   if (!hardwareId) return res.status(400).json({ error: 'x-hardware-id header required' });
@@ -121,13 +121,17 @@ app.post('/api/screenshots', upload.single('screenshot'), (req, res) => {
   const jpegFilename = req.file.originalname.replace(/\.png$/i, '.jpg');
   const jpegPath = path.join(uploadsDir, hardwareId, jpegFilename);
 
-  sharp(origPath).jpeg({ quality: 80 }).toFile(jpegPath)
-    .then(() => { try { fs.unlinkSync(origPath); } catch {} })
-    .catch(() => {});
+  try {
+    await sharp(origPath).jpeg({ quality: 80 }).toFile(jpegPath);
+  } catch (e) {
+    console.error('[screenshot] sharp conversion failed:', e.message);
+  }
+
+  try { fs.unlinkSync(origPath); } catch {}
 
   const thumbName = jpegFilename;
   const thumbPath = path.join(thumbsDir, thumbName);
-  sharp(origPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
+  sharp(jpegPath).resize(320, 200, { fit: 'cover' }).jpeg({ quality: 70 }).toFile(thumbPath).catch(() => {});
 
   const stmt = db.prepare(`
     INSERT OR IGNORE INTO screenshots (hardware_id, filename, captured_at, file_size)
