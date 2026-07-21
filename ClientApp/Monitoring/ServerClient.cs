@@ -192,6 +192,7 @@ namespace Monitoring
                 }
                 catch (Exception ex)
                 {
+                    _serverOnline = false;
                     LogError("UploadScreenshot", ex);
                 }
             }
@@ -254,6 +255,7 @@ namespace Monitoring
                     }
                     catch (Exception ex)
                     {
+                        _serverOnline = false;
                         LogError("UploadWorkLogs", ex);
                     }
                 }
