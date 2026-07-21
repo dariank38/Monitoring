@@ -7,7 +7,6 @@ import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import MachineDetail from './pages/MachineDetail.jsx'
 import Settings from './pages/Settings.jsx'
-import LiveView from './pages/LiveView.jsx'
 
 function App() {
   const [authed, setAuthed] = useState(isAuthenticated())
@@ -20,7 +19,6 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/live" element={<LiveView />} />
         <Route path="/machine/:hardwareId" element={<MachineDetail />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
