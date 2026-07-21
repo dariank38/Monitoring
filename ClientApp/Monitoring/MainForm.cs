@@ -9,7 +9,6 @@ namespace Monitoring
         private const int DefaultIntervalMs = 90_000;
         private const int WarningMs = 10_000;
         private const int IndicatorSize = 10;
-        private static readonly Random Rng = new();
 
         private static readonly Color[] PulseColors =
         {
@@ -40,7 +39,7 @@ namespace Monitoring
             Size = new Size(IndicatorSize, IndicatorSize);
             ClientSize = new Size(IndicatorSize, IndicatorSize);
             StartPosition = FormStartPosition.Manual;
-            BackColor = Color.LimeGreen;
+            BackColor = Color.Red;
 
             _activityTracker = new ActivityTracker();
             _serverClient = new ServerClient();

@@ -1,6 +1,5 @@
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
@@ -13,13 +12,11 @@ namespace Monitoring
     {
         private readonly string _logFolder;
         private readonly string _configPath;
-        private readonly IntPtr _hwnd;
         private IDirect3DDevice? _d3dDevice;
 
         public CaptureModule(string logFolder, IntPtr ownerHandle, string? configPath = null)
         {
             _logFolder = logFolder;
-            _hwnd = ownerHandle;
             _configPath = configPath ?? ExclusionConfig.DefaultConfigPath;
         }
 
@@ -140,13 +137,7 @@ namespace Monitoring
                 var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 var resultPath = Path.Combine(_logFolder, fileName);
 
-                await Task.Run(() =>
-                {
-                    var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                    var encoderParams = new EncoderParameters(1);
-                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
-                    combinedBitmap.Save(resultPath, jpegEncoder, encoderParams);
-                });
+                await Task.Run(() => SaveJpeg(combinedBitmap, resultPath));
                 combinedBitmap.Dispose();
 
                 System.Diagnostics.Debug.WriteLine($"[Capture] Saved: {resultPath}");
@@ -171,13 +162,7 @@ namespace Monitoring
                 }
                 var fileName = $"Capture_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
                 var filePath = Path.Combine(_logFolder, fileName);
-                await Task.Run(() =>
-                {
-                    var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                    var encoderParams = new EncoderParameters(1);
-                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
-                    bitmap.Save(filePath, jpegEncoder, encoderParams);
-                });
+                await Task.Run(() => SaveJpeg(bitmap, filePath));
                 System.Diagnostics.Debug.WriteLine($"[Capture] Fallback saved: {filePath}");
                 return filePath;
             }
@@ -186,6 +171,14 @@ namespace Monitoring
                 System.Diagnostics.Debug.WriteLine($"[Capture] Fallback error: {ex.GetType().Name}: {ex.Message}");
                 return null;
             }
+        }
+
+        private static void SaveJpeg(Bitmap bitmap, string filePath)
+        {
+            var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
+            var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
+            bitmap.Save(filePath, jpegEncoder, encoderParams);
         }
 
         private async Task<Direct3D11CaptureFrame?> CaptureSingleMonitorAsync(IntPtr hmon)
