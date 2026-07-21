@@ -175,6 +175,7 @@ router.get('/machines/:hardwareId/worklogs/summary', asyncHandler((req, res) => 
     SELECT log_date,
       SUM(CASE WHEN status = 'Active' THEN duration_sec ELSE 0 END) as active_sec,
       SUM(CASE WHEN status = 'Idle' THEN duration_sec ELSE 0 END) as idle_sec,
+      SUM(CASE WHEN status = 'Away' THEN duration_sec ELSE 0 END) as away_sec,
       SUM(key_count) as total_keys,
       SUM(mouse_count) as total_mouse
     FROM work_logs
