@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const PORT = process.env.PORT || 3000;
 export const RETENTION_DAYS = 180;
-export const LAOS_OFFSET_HOURS = 7;
+export const LAOS_OFFSET_HOURS = parseInt(process.env.TZ_OFFSET_HOURS || '7', 10);
 
 export const uploadsDir = path.join(__dirname, '..', 'uploads');
 export const thumbsDir = path.join(__dirname, '..', 'uploads', '_thumbs');

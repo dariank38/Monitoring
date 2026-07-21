@@ -3,6 +3,21 @@
 
 $ErrorActionPreference = "Stop"
 
+# Check Node.js is installed and version >= 22 (needed for node:sqlite)
+try {
+    $nodeVersion = (node --version) 2>$null
+    if (-not $nodeVersion) { throw "not found" }
+    $major = [int]($nodeVersion -replace '^v(\d+).*', '$1')
+    if ($major -lt 22) {
+        Write-Host "ERROR: Node.js v22+ required (found $nodeVersion). node:sqlite needs v22+." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Node.js $nodeVersion detected" -ForegroundColor Green
+} catch {
+    Write-Host "ERROR: Node.js is not installed or not in PATH. Install Node.js v22+ from https://nodejs.org" -ForegroundColor Red
+    exit 1
+}
+
 $root = $PSScriptRoot
 $adminDir = Join-Path $root "Admin"
 $serverDir = Join-Path $root "Server"

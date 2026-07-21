@@ -5,7 +5,7 @@ import path from 'path';
 import sharp from 'sharp';
 import db from '../db.js';
 import { uploadsDir, thumbsDir } from '../config.js';
-import { toLaosTime, laosNowSqlite, sanitizePathComponent } from '../utils.js';
+import { toLaosTime, laosNowSqlite, sanitizePathComponent, asyncHandler } from '../utils.js';
 
 const router = express.Router();
 
@@ -41,7 +41,7 @@ function getSetting(key, defaultValue = null) {
   return row ? row.value : defaultValue;
 }
 
-router.post('/heartbeat', (req, res) => {
+router.post('/heartbeat', asyncHandler((req, res) => {
   const { hardware_id, computer_name, timezone } = req.body;
   if (!hardware_id) return res.status(400).json({ error: 'hardware_id required' });
 
@@ -49,9 +49,9 @@ router.post('/heartbeat', (req, res) => {
   const captureIntervalSec = parseInt(getSetting('capture_interval_sec', '90'), 10);
   console.log(`[heartbeat] ${computer_name} (${hardware_id.substring(0, 12)}...) tz=${timezone || 'n/a'}`);
   res.json({ ok: true, capture_interval_sec: captureIntervalSec });
-});
+}));
 
-router.post('/screenshots', upload.single('screenshot'), async (req, res) => {
+router.post('/screenshots', upload.single('screenshot'), asyncHandler(async (req, res) => {
   const hardwareId = req.headers['x-hardware-id'];
   const computerName = req.headers['x-computer-name'] || 'unknown';
   if (!hardwareId) return res.status(400).json({ error: 'x-hardware-id header required' });
@@ -101,9 +101,9 @@ router.post('/screenshots', upload.single('screenshot'), async (req, res) => {
   stmt.run(hardwareId, finalFilename, capturedAt, fileSize);
 
   res.json({ ok: true, filename: finalFilename });
-});
+}));
 
-router.post('/worklogs', (req, res) => {
+router.post('/worklogs', asyncHandler((req, res) => {
   const hardwareId = req.headers['x-hardware-id'];
   const computerName = req.headers['x-computer-name'] || 'unknown';
   if (!hardwareId) return res.status(400).json({ error: 'x-hardware-id header required' });
@@ -138,7 +138,7 @@ router.post('/worklogs', (req, res) => {
     throw err;
   }
   res.json({ ok: true, count: logs.length });
-});
+}));
 
 export default router;
 export { upsertMachine, getSetting };
