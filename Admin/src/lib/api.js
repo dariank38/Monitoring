@@ -122,3 +122,22 @@ export async function updateSettings(settings) {
   if (res.status === 401) throw new Error('Unauthorized')
   return res.json()
 }
+
+export async function deleteScreenshot(id) {
+  const res = await authJson(`${API_BASE}/api/screenshots/${id}`, { method: 'DELETE' })
+  if (res.status === 401) throw new Error('Unauthorized')
+  return res.json()
+}
+
+export async function deleteScreenshotsBulk(hardwareId, { date, hour, from, to } = {}) {
+  let url = `${API_BASE}/api/machines/${hardwareId}/screenshots`
+  const params = []
+  if (date) params.push(`date=${date}`)
+  if (hour !== undefined) params.push(`hour=${hour}`)
+  if (from) params.push(`from=${from}`)
+  if (to) params.push(`to=${to}`)
+  if (params.length) url += `?${params.join('&')}`
+  const res = await authJson(url, { method: 'DELETE' })
+  if (res.status === 401) throw new Error('Unauthorized')
+  return res.json()
+}

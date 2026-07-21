@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Grid, Film, Loader2, Calendar, X } from 'lucide-react'
-import { fetchMachine, fetchScreenshots, fetchHeatmap, fetchWorkLogSummary, screenshotUrl, thumbnailUrl, clearPassword } from '../lib/api'
+import { ArrowLeft, Grid, Film, Loader2, Calendar, X, Trash2 } from 'lucide-react'
+import { fetchMachine, fetchScreenshots, fetchHeatmap, fetchWorkLogSummary, screenshotUrl, thumbnailUrl, clearPassword, deleteScreenshot, deleteScreenshotsBulk } from '../lib/api'
 import { formatDuration, formatDateTime, formatDateTimeLaos, formatDateTimeClientTZ, isOnline, cn } from '../lib/utils'
 import HeatmapTimeline from '../components/HeatmapTimeline.jsx'
 import ScreenshotSlider from '../components/ScreenshotSlider.jsx'
@@ -37,6 +37,7 @@ export default function MachineDetail() {
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const sentinelRef = useRef(null)
 
   // Shared date range
@@ -141,6 +142,44 @@ export default function MachineDetail() {
     await loadScreenshots()
   }
 
+  const handleDeleteOne = async (e, screenshotId) => {
+    e.stopPropagation()
+    if (!confirm('Delete this screenshot?')) return
+    setDeleting(true)
+    try {
+      await deleteScreenshot(screenshotId)
+      setScreenshots(prev => prev.filter(s => s.id !== screenshotId))
+    } catch (e) {
+      if (e.message === 'Unauthorized') { clearPassword(); window.location.reload(); return }
+      console.error('Failed to delete screenshot', e)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteBulk = async () => {
+    const label = filterDate
+      ? `${filterDate}${filterHour !== null ? ` ${String(filterHour).padStart(2, '0')}:00` : ''}`
+      : `${appliedFrom} to ${appliedTo}`
+    if (!confirm(`Delete ALL screenshots${filterDate ? ' from' : ' in range'} ${label}? This cannot be undone.`)) return
+    setDeleting(true)
+    try {
+      const result = await deleteScreenshotsBulk(hardwareId, filterDate
+        ? { date: filterDate, hour: filterHour }
+        : { from: rangeParams.from, to: rangeParams.to }
+      )
+      setScreenshots([])
+      setCursor(null)
+      setHasMore(false)
+      alert(`Deleted ${result.deleted} screenshot(s)`)
+    } catch (e) {
+      if (e.message === 'Unauthorized') { clearPassword(); window.location.reload(); return }
+      console.error('Failed to bulk delete screenshots', e)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const applyDateRange = () => {
     setAppliedFrom(dateFrom)
     setAppliedTo(dateTo)
@@ -239,6 +278,16 @@ export default function MachineDetail() {
                   {filterDate} {filterHour !== null && `${String(filterHour).padStart(2, '0')}:00`} ✕
                 </button>
               )}
+              {screenshots.length > 0 && (
+                <button
+                  onClick={handleDeleteBulk}
+                  disabled={deleting}
+                  className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {filterDate ? 'Delete filtered' : 'Delete range'}
+                </button>
+              )}
               <div className="flex bg-white border rounded-lg overflow-hidden">
                 <button
                   onClick={() => setViewMode('grid')}
@@ -275,9 +324,17 @@ export default function MachineDetail() {
                   {screenshots.map((s, i) => (
                     <div
                       key={s.id}
-                      className="bg-white rounded-lg border overflow-hidden group cursor-pointer"
+                      className="bg-white rounded-lg border overflow-hidden group cursor-pointer relative"
                       onClick={() => setModalIndex(i)}
                     >
+                      <button
+                        onClick={(e) => handleDeleteOne(e, s.id)}
+                        disabled={deleting}
+                        className="absolute top-1 right-1 z-10 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-50"
+                        title="Delete screenshot"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                       <img
                         src={thumbnailUrl(s.id)}
                         alt={s.filename}
