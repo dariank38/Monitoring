@@ -5,6 +5,7 @@ import { fetchSettings, updateSettings } from '../lib/api'
 
 export default function Settings() {
   const [interval, setInterval] = useState(90)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -26,10 +27,17 @@ export default function Settings() {
   }, [])
 
   const handleSave = async () => {
+    const val = parseInt(interval, 10)
+    if (isNaN(val) || val < 10) {
+      setError('Interval must be a number of at least 10 seconds')
+      return
+    }
+    setError('')
     setSaving(true)
     setSaved(false)
     try {
-      await updateSettings({ capture_interval_sec: interval })
+      await updateSettings({ capture_interval_sec: val })
+      setInterval(val)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
@@ -69,14 +77,13 @@ export default function Settings() {
               <label className="text-xs text-slate-500 mb-1 block">Interval (seconds)</label>
               <input
                 type="number"
-                min="10"
                 value={interval}
-                onChange={(e) => setInterval(Math.max(10, parseInt(e.target.value) || 90))}
+                onChange={(e) => setInterval(e.target.value)}
                 className="w-full border rounded-md px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="text-sm text-slate-400 mt-5">
-              = {Math.floor(interval / 60)}m {interval % 60}s
+              = {Math.floor((parseInt(interval, 10) || 0) / 60)}m {(parseInt(interval, 10) || 0) % 60}s
             </div>
           </div>
 
@@ -94,6 +101,9 @@ export default function Settings() {
                 <Check className="w-4 h-4" />
                 Saved
               </span>
+            )}
+            {error && (
+              <span className="text-sm text-red-600">{error}</span>
             )}
           </div>
         </div>

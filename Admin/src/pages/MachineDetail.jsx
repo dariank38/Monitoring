@@ -50,7 +50,7 @@ export default function MachineDetail() {
   const rangeParams = useMemo(() => {
     const params = {}
     if (appliedFrom) params.from = appliedFrom
-    if (appliedTo) params.to = appliedTo + 'T23:59:59'
+    if (appliedTo) params.to = appliedTo + ' 23:59:59'
     return params
   }, [appliedFrom, appliedTo])
 
@@ -92,8 +92,8 @@ export default function MachineDetail() {
         const [m, ss, hm, sm] = await Promise.all([
           fetchMachine(hardwareId),
           fetchScreenshots(hardwareId, PAGE_SIZE, undefined, undefined, undefined, rangeParams.from, rangeParams.to),
-          fetchHeatmap(hardwareId, undefined, rangeParams.from, rangeParams.to?.replace('T23:59:59', '')),
-          fetchWorkLogSummary(hardwareId, undefined, rangeParams.from, rangeParams.to?.replace('T23:59:59', '')),
+          fetchHeatmap(hardwareId, undefined, rangeParams.from, rangeParams.to?.replace(' 23:59:59', '')),
+          fetchWorkLogSummary(hardwareId, undefined, rangeParams.from, rangeParams.to?.replace(' 23:59:59', '')),
         ])
         setMachine(m)
         setScreenshots(ss.items)

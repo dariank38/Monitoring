@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import db from '../db.js';
-import { uploadsDir, thumbsDir } from '../config.js';
+import { uploadsDir, thumbsDir, LAOS_OFFSET_HOURS } from '../config.js';
 import { sanitizePathComponent, asyncHandler, buildScreenshotFilter } from '../utils.js';
 import { adminAuth, ADMIN_PASSWORD } from '../auth.js';
 
@@ -190,7 +190,7 @@ router.get('/machines/:hardwareId/worklogs/summary', asyncHandler((req, res) => 
     params.push(to);
   }
   if (days) {
-    query += ` AND log_date >= date('now', ?)`;
+    query += ` AND log_date >= date('now', '+${LAOS_OFFSET_HOURS} hours', ?)`;
     params.push(`-${days} days`);
   }
   query += ` GROUP BY log_date ORDER BY log_date DESC`;
@@ -215,7 +215,7 @@ router.get('/machines/:hardwareId/worklogs/heatmap', asyncHandler((req, res) => 
     params.push(to);
   }
   if (days) {
-    query += ` AND log_date >= date('now', ?)`;
+    query += ` AND log_date >= date('now', '+${LAOS_OFFSET_HOURS} hours', ?)`;
     params.push(`-${days} days`);
   }
   query += ` ORDER BY log_date ASC, start_time ASC`;
@@ -226,22 +226,24 @@ router.get('/machines/:hardwareId/worklogs/heatmap', asyncHandler((req, res) => 
   for (const log of logs) {
     const startStr = `${log.log_date} ${log.start_time}`;
     const endStr = `${log.log_date} ${log.end_time}`;
-    const start = new Date(startStr);
-    const end = new Date(endStr);
+    const start = new Date(startStr + '+07:00');
+    const end = new Date(endStr + '+07:00');
     if (isNaN(start) || isNaN(end)) continue;
 
     let current = start;
     while (current < end) {
       const hourEnd = new Date(current);
-      hourEnd.setMinutes(0, 0, 0);
-      hourEnd.setHours(hourEnd.getHours() + 1);
+      hourEnd.setUTCMinutes(0, 0, 0);
+      hourEnd.setUTCHours(hourEnd.getUTCHours() + 1);
       const segEnd = end < hourEnd ? end : hourEnd;
       const segSec = Math.floor((segEnd - current) / 1000);
-      const y = current.getFullYear();
-      const mo = String(current.getMonth() + 1).padStart(2, '0');
-      const da = String(current.getDate()).padStart(2, '0');
+      const laosMs = current.getTime() + LAOS_OFFSET_HOURS * 3600000;
+      const laosDate = new Date(laosMs);
+      const y = laosDate.getUTCFullYear();
+      const mo = String(laosDate.getUTCMonth() + 1).padStart(2, '0');
+      const da = String(laosDate.getUTCDate()).padStart(2, '0');
       const dateKey = `${y}-${mo}-${da}`;
-      const hour = current.getHours();
+      const hour = laosDate.getUTCHours();
       const key = `${dateKey}|${hour}`;
 
       if (!buckets[key]) {
