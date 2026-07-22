@@ -282,7 +282,7 @@ router.put('/settings', asyncHandler((req, res) => {
   const updates = [];
   if (capture_interval_sec !== undefined) {
     const val = parseInt(capture_interval_sec, 10);
-    if (isNaN(val) || val < 10) return res.status(400).json({ error: 'capture_interval_sec must be a number >= 10' });
+    if (isNaN(val) || val < 30) return res.status(400).json({ error: 'capture_interval_sec must be a number >= 30' });
     updates.push(['capture_interval_sec', String(val)]);
   }
   const stmt = db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`);

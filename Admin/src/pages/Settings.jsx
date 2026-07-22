@@ -28,8 +28,8 @@ export default function Settings() {
 
   const handleSave = async () => {
     const val = parseInt(interval, 10)
-    if (isNaN(val) || val < 10) {
-      setError('Interval must be a number of at least 10 seconds')
+    if (isNaN(val) || val < 30) {
+      setError('Interval must be a number of at least 30 seconds')
       return
     }
     setError('')
