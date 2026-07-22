@@ -192,7 +192,7 @@ namespace Monitoring
 
         private void OnCaptureIntervalChanged(int intervalSec)
         {
-            if (intervalSec < 10) return;
+            if (intervalSec < 30) return;
             var newInterval = Math.Max(1000, intervalSec * 1000 - WarningMs);
             if (_captureTimer.Interval != newInterval)
             {
