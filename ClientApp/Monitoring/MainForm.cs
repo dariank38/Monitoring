@@ -1,5 +1,8 @@
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Windows.Forms;
 
 namespace Monitoring
@@ -19,6 +22,9 @@ namespace Monitoring
         private int _colorIndex;
         private readonly List<IndicatorForm> _indicators = new();
         private bool _serverOnline;
+        private bool _dragging;
+        private Point _dragOffset;
+        private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "Logs", "config.json");
 
         public MainForm()
         {
@@ -60,6 +66,9 @@ namespace Monitoring
             Load += MainForm_Load;
             FormClosed += MainForm_FormClosed;
             DoubleClick += MainForm_DoubleClick;
+            MouseDown += MainForm_MouseDown;
+            MouseMove += MainForm_MouseMove;
+            MouseUp += MainForm_MouseUp;
 
             var contextMenu = new ContextMenuStrip();
             contextMenu.Items.Add("View Work Logs", null, (_, _) => MainForm_DoubleClick(null, EventArgs.Empty));
@@ -110,12 +119,105 @@ namespace Monitoring
             _serverClient.Dispose();
             foreach (var indicator in _indicators)
                 indicator.Close();
+            SaveIndicatorPosition(Location);
+        }
+
+        private void MainForm_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _dragging = true;
+                _dragOffset = e.Location;
+            }
+        }
+
+        private void MainForm_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_dragging)
+            {
+                var newLoc = PointToScreen(e.Location);
+                newLoc.Offset(-_dragOffset.X, -_dragOffset.Y);
+                Location = newLoc;
+            }
+        }
+
+        private void MainForm_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (_dragging)
+            {
+                _dragging = false;
+                SaveIndicatorPosition(Location);
+            }
+        }
+
+        private static Point? LoadIndicatorPosition()
+        {
+            try
+            {
+                if (File.Exists(ConfigPath))
+                {
+                    var json = File.ReadAllText(ConfigPath);
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("indicator_x", out var xEl) &&
+                        doc.RootElement.TryGetProperty("indicator_y", out var yEl))
+                    {
+                        return new Point(xEl.GetInt32(), yEl.GetInt32());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("LoadIndicatorPosition", ex);
+            }
+            return null;
+        }
+
+        private static void SaveIndicatorPosition(Point pos)
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(ConfigPath)!;
+                Directory.CreateDirectory(dir);
+                string json;
+                if (File.Exists(ConfigPath))
+                {
+                    var existing = File.ReadAllText(ConfigPath);
+                    using var doc = JsonDocument.Parse(existing);
+                    var writer = new StringBuilder("{");
+                    var first = true;
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (prop.Name == "indicator_x" || prop.Name == "indicator_y") continue;
+                        if (!first) writer.Append(',');
+                        first = false;
+                        writer.Append($"\"{prop.Name}\":{prop.Value.GetRawText()}");
+                    }
+                    if (!first) writer.Append(',');
+                    writer.Append($"\"indicator_x\":{pos.X},\"indicator_y\":{pos.Y}}}");
+                    json = writer.ToString();
+                }
+                else
+                {
+                    json = $"{{\"indicator_x\":{pos.X},\"indicator_y\":{pos.Y}}}";
+                }
+                File.WriteAllText(ConfigPath, json);
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("SaveIndicatorPosition", ex);
+            }
         }
 
         private async void MainForm_Load(object? sender, EventArgs e)
         {
-            var primary = Screen.PrimaryScreen!;
-            SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - IndicatorSize, IndicatorSize, IndicatorSize);
+            var savedPos = LoadIndicatorPosition();
+            if (savedPos.HasValue)
+                SetBounds(savedPos.Value.X, savedPos.Value.Y, IndicatorSize, IndicatorSize);
+            else
+            {
+                var primary = Screen.PrimaryScreen!;
+                SetBounds(primary.Bounds.Left, primary.Bounds.Bottom - IndicatorSize, IndicatorSize, IndicatorSize);
+            }
 
             _activityTracker.Start();
             _serverClient.Start();
@@ -174,7 +276,7 @@ namespace Monitoring
                 {
                     var jpegEncoder = ImageCodecInfo.GetImageEncoders().First(c => c.FormatID == ImageFormat.Jpeg.Guid);
                     var encoderParams = new EncoderParameters(1);
-                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 80L);
+                    encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 80L);
                     bitmap.Save(filePath, jpegEncoder, encoderParams);
                 });
 
